@@ -1,11 +1,21 @@
 # BluetoothHeartrate
 
-A BLE heartrate sensor module for [VRCOSC] based on the original [HeartrateModule]
+A Bluetooth Low Energy (BLE) heartrate sensor module for [VRCOSC] based on the original [HeartrateModule]
 
 [VRCOSC]: https://github.com/VolcanicArts/VRCOSC
 [HeartrateModule]: https://github.com/VolcanicArts/VRCOSC/blob/2022.1219.0/VRCOSC.Game/Modules/Modules/Heartrate/HeartRateModule.cs
 
 ## How to use
+
+### Prerequsites
+
+This module requires that your machine has either:
+* built-in Bluetooth support
+* a USB Bluetooth dongle
+
+Either of which must be capable of handling at least Bluetooth version 4.0 (which includes support for talking to BLE devices)
+
+### Setup steps
 
 1. Find the latest release on the [Releases] page
 2. Download the attached DLL
