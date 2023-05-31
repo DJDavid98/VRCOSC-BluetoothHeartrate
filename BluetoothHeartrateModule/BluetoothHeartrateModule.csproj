@@ -4,6 +4,8 @@
         <TargetFramework>net6.0-windows10.0.22621.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <AssemblyVersion>1.0.1.0</AssemblyVersion>
+        <FileVersion>1.0.1.0</FileVersion>
     </PropertyGroup>
 
     <ItemGroup>
@@ -11,7 +13,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="VolcanicArts.VRCOSC.SDK" Version="2023.516.0" />
+		<PackageReference Include="VolcanicArts.VRCOSC.SDK" Version="2023.531.0" />
     </ItemGroup>
 
 </Project>
