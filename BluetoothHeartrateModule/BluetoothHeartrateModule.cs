@@ -17,12 +17,14 @@ namespace BluetoothHeartrateModule
         private DateTimeOffset lastHeartrateTime;
 
         private BluetoothConnectionManager connectionManager;
+        private WebsocketHeartrateServer wsServer;
 
         private bool IsReceiving => connectionManager.IsConnected && lastHeartrateTime + heartrateTimeout >= DateTimeOffset.Now;
 
         public BluetoothHeartrateModule()
         {
             connectionManager = new BluetoothConnectionManager(this);
+            wsServer = new WebsocketHeartrateServer(this);
         }
 
         internal new void Log(string message)
@@ -40,6 +42,9 @@ namespace BluetoothHeartrateModule
 
             CreateSetting(BluetoothHeartrateSetting.NormalisedLowerbound, @"Normalised Lowerbound", @"The lower bound BPM the normalised parameter should use", 0);
             CreateSetting(BluetoothHeartrateSetting.NormalisedUpperbound, @"Normalised Upperbound", @"The upper bound BPM the normalised parameter should use", 240);
+            CreateSetting(BluetoothHeartrateSetting.WebsocketServerEnabled, @"Websocket Server Enabled", @"Broadcast the heartrate data over a local Websocket server", false);
+            CreateSetting(BluetoothHeartrateSetting.WebsocketServerHost, @"Websocket Server Hostname", @"Hostname (IP address) for the Websocket server", "127.0.0.1", () => GetSetting<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled));
+            CreateSetting(BluetoothHeartrateSetting.WebsocketServerPort, @"Websocket Server Port", @"Port for the Websocket server", 36210, () => GetSetting<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled));
 
             CreateParameter<bool>(BluetoothHeartrateParameter.Enabled, ParameterMode.Write, "VRCOSC/Heartrate/Enabled", "Enabled", "Whether this module is attempting to emit values");
             CreateParameter<float>(BluetoothHeartrateParameter.Normalised, ParameterMode.Write, "VRCOSC/Heartrate/Normalised", "Normalised", "The heartrate value normalised to 240bpm");
@@ -52,10 +57,11 @@ namespace BluetoothHeartrateModule
             CreateState(BluetoothHeartrateState.Default, @"Default", $@"Heartrate/v{GetVariableFormat(BluetoothHeartrateVariable.Heartrate)} bpm");
         }
 
-        protected override void OnModuleStart()
+        protected override async void OnModuleStart()
         {
             ResetModuleState();
             connectionManager.StartWatcher();
+            await wsServer.Start();
         }
 
         internal void ResetModuleState()
@@ -70,7 +76,6 @@ namespace BluetoothHeartrateModule
         {
             return GetSetting<string>(BluetoothHeartrateSetting.DeviceMac);
         }
-
         internal int GetNormalisedLowerboundSetting()
         {
             return GetSetting<int>(BluetoothHeartrateSetting.NormalisedLowerbound);
@@ -79,6 +84,18 @@ namespace BluetoothHeartrateModule
         {
             return GetSetting<int>(BluetoothHeartrateSetting.NormalisedUpperbound);
         }
+        internal bool GetWebocketEnabledSetting()
+        {
+            return GetSetting<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled);
+        }
+        internal string GetWebocketHostSetting()
+        {
+            return GetSetting<string>(BluetoothHeartrateSetting.WebsocketServerHost);
+        }
+        internal int GetWebocketPortSetting()
+        {
+            return GetSetting<int>(BluetoothHeartrateSetting.WebsocketServerPort);
+        }
 
         internal void UpdateHeartrate(byte heartRate)
         {
@@ -86,9 +103,10 @@ namespace BluetoothHeartrateModule
             lastHeartrateTime = DateTimeOffset.Now;
         }
 
-        protected override void OnModuleUpdate()
+        protected override async void OnModuleUpdate()
         {
             SendParameters();
+            await wsServer.SendByteMessage(currentHeartrate);
         }
 
         internal void SendParameters()
@@ -112,20 +130,24 @@ namespace BluetoothHeartrateModule
                 SendParameter(BluetoothHeartrateParameter.Units, 0);
                 SendParameter(BluetoothHeartrateParameter.Tens, 0);
                 SendParameter(BluetoothHeartrateParameter.Hundreds, 0);
-                SetVariableValue(BluetoothHeartrateVariable.Heartrate, "0");
+                SetVariableValue(BluetoothHeartrateVariable.Heartrate, @"0");
             }
         }
 
         protected override void OnModuleStop()
         {
             connectionManager.Reset();
+            wsServer.Stop();
         }
 
         internal enum BluetoothHeartrateSetting
         {
             DeviceMac,
             NormalisedLowerbound,
-            NormalisedUpperbound
+            NormalisedUpperbound,
+            WebsocketServerEnabled,
+            WebsocketServerHost,
+            WebsocketServerPort
         }
 
         internal enum BluetoothHeartrateParameter
