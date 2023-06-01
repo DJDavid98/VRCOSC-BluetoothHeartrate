@@ -52,6 +52,18 @@ If everything went well, you should see the following messages:
 
 [Releases]: https://github.com/DJDavid98/VRCOSC-BluetoothHeartrate/releases
 
+#### Advanced usage
+
+There is an option to enable broadcasting the heartrate value over Websocket to enable sharing this value with external tools, like web-based streaming overlays.
+
+You will need an attional program or website to receive and process these values, if you don't have a specific use for this, then enabling it only serves to waste your system resources.
+
+When enabled, a Websocket server is created that will listen on the provided host and port, and it will broadcast the current heart rate value every second to all connected clients.
+
+Usually a host value of `127.0.0.1` will be a safe bet as it allows you to connect to the server locally, but `0.0.0.0` can also be used to allow connections from external devices as well.
+
+As for the port, you can choose any number that is not already in use on the system (for external connections, this must be forwarded on your router and/or allower though any firewalls). The default (which has no hidden meaning whatsoever) should be a relatively safe bet.
+
 ### Known issues
 
 Sometimes Windows' Bluetooth API starts being weird and you will see a "No heartrate characteristic found" in the logs.
