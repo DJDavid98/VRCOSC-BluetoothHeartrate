@@ -104,7 +104,7 @@ namespace BluetoothHeartrateModule
                     {
                         if (webSocket != null)
                         {
-                            await webSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, null, new CancellationToken(true));
+                            await webSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, null, new CancellationToken());
                         }
                     }
                 }
@@ -146,7 +146,7 @@ namespace BluetoothHeartrateModule
             connectedClients.TryRemove(clientId, out removedClient);
             if (removedClient != null)
             {
-                await removedClient.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, null, new CancellationToken(true));
+                await removedClient.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, null, new CancellationToken());
                 removedClient.Dispose();
             }
             module.Log($"WebSocket client {clientId} disconnected.");
