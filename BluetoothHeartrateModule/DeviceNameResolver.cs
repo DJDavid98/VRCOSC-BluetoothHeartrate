@@ -16,7 +16,7 @@ namespace BluetoothHeartrateModule
                 return advertisementDeviceName;
             }
 
-            var device = await BluetoothLEDevice.FromBluetoothAddressAsync(bluetoothAddress);
+            using var device = await BluetoothLEDevice.FromBluetoothAddressAsync(bluetoothAddress);
             // Get the device name using the DeviceInformation class
             DeviceInformation deviceInfo = await DeviceInformation.CreateFromIdAsync(device.DeviceId);
             var deviceName = deviceInfo.Name;
@@ -37,8 +37,6 @@ namespace BluetoothHeartrateModule
                 foreach (var service in services.Services)
                     service.Dispose();
             }
-            device.Dispose();
-
             return GetDeviceNameOrFallback(deviceName);
         }
 

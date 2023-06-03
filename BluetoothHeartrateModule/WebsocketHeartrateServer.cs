@@ -10,6 +10,9 @@ namespace BluetoothHeartrateModule
         BluetoothHeartrateModule module;
         static ConcurrentDictionary<Guid, WebSocket> connectedClients = new();
         static CancellationTokenSource? serverCancellation;
+        static HttpListener? httpListener;
+
+        public Action<Guid>? OnClientConnect;
 
         public WebsocketHeartrateServer(BluetoothHeartrateModule module)
         {
@@ -19,33 +22,40 @@ namespace BluetoothHeartrateModule
         internal async Task Start()
         {
             connectedClients.Clear();
-            serverCancellation?.Dispose();
-            serverCancellation = new CancellationTokenSource();
+            ResetServerCancellation();
 
             if (!module.GetWebocketEnabledSetting())
             {
                 return;
             }
+            serverCancellation = new CancellationTokenSource();
+
             var httpAddress = GetListenAddress();
             var wsAddress = GetListenAddress("ws");
-            module.Log($"Starting Websocket server on {httpAddress}");
-            var httpListener = new HttpListener();
-            httpListener.Prefixes.Add(httpAddress);
-            try
+            if (httpListener == null)
             {
-                httpListener.Start();
+                httpListener = new HttpListener();
+                httpListener.Prefixes.Add(httpAddress);
             }
-            catch (HttpListenerException ex)
+            if (!httpListener.IsListening)
             {
-                module.Log($"Failed to start WebSocket server: {ex.Message}");
-                return;
+                module.Log($"Starting Websocket server on {httpAddress}");
+                try
+                {
+                    httpListener.Start();
+                }
+                catch (HttpListenerException ex)
+                {
+                    module.Log($"Failed to start WebSocket server: {ex.Message}");
+                    return;
+                }
             }
 
-            module.Log($"Websocket server started, connnect using {wsAddress}");
-            _ = HandleServerCommands();
+            module.Log($"Websocket server is running, connnect using {wsAddress}");
 
             try
             {
+                _ = HandleServerCommands();
                 while (true)
                 {
                     var context = await httpListener.GetContextAsync();
@@ -55,6 +65,7 @@ namespace BluetoothHeartrateModule
                         var clientId = Guid.NewGuid();
                         connectedClients.TryAdd(clientId, webSocketContext.WebSocket);
                         module.Log($"Websocket client {clientId} connected.");
+                        OnClientConnect?.Invoke(clientId);
 
                         _ = HandleWebSocketConnection(clientId, webSocketContext.WebSocket);
                     }
@@ -71,45 +82,58 @@ namespace BluetoothHeartrateModule
             }
             finally
             {
-                httpListener.Stop();
-                serverCancellation.Dispose();
+                StopHttpListener();
+                serverCancellation?.Dispose();
                 module.Log("Websocket server stopped");
             }
         }
 
-        // Public method to send a byte message to all clients
-        internal async Task SendByteMessage(byte message)
-        {
-            if (!module.GetWebocketEnabledSetting())
-            {
-                return;
-            }
-
-            var messageBuffer = new ArraySegment<byte>(Converter.GetAsciiStringBytes(message));
-            foreach (var clientId in connectedClients.Keys)
-            {
-                await SendByteMessage(clientId, messageBuffer);
-            }
-        }
-
-        // Public method to stop the server
-        internal async void Stop()
+        private void ResetServerCancellation()
         {
             if (serverCancellation != null)
             {
                 serverCancellation.Cancel();
-                foreach (var clientId in connectedClients.Keys)
-                {
-                    if (connectedClients.TryGetValue(clientId, out WebSocket? webSocket))
-                    {
-                        if (webSocket != null)
-                        {
-                            await webSocket.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, null, new CancellationToken());
-                        }
-                    }
-                }
+                serverCancellation.Dispose();
+                serverCancellation = null;
             }
+        }
+
+        private void StopHttpListener()
+        {
+            if (httpListener?.IsListening == true)
+            {
+                httpListener.Stop();
+            }
+        }
+
+        // Public method to send an int message to all clients
+        internal async Task SendIntMessage(int message)
+        {
+            if (!module.GetWebocketEnabledSetting())
+            {
+                Stop();
+                return;
+            }
+
+            var messageBuffer = new ArraySegment<byte>(Converter.GetAsciiStringInt(message));
+            foreach (var clientId in connectedClients.Keys)
+            {
+                await SendMessage(clientId, messageBuffer);
+            }
+        }
+        // Public method to send an int message to specific client
+        internal async Task SendIntMessage(int message, Guid clientId)
+        {
+            var messageBuffer = new ArraySegment<byte>(Converter.GetAsciiStringInt(message));
+            await SendMessage(clientId, messageBuffer);
+        }
+
+        // Public method to stop the server
+        internal void Stop()
+        {
             module.Log($"WebSocket server stopping");
+            ResetServerCancellation();
+            StopHttpListener();
         }
 
         private string GetListenAddress()
@@ -153,8 +177,14 @@ namespace BluetoothHeartrateModule
         }
 
         // Public method to send a byte message to a specific client
-        private async Task SendByteMessage(Guid clientId, ArraySegment<byte> buffer)
+        private async Task SendMessage(Guid clientId, ArraySegment<byte> buffer)
         {
+            if (!module.GetWebocketEnabledSetting())
+            {
+                Stop();
+                return;
+            }
+
             if (connectedClients.TryGetValue(clientId, out WebSocket? webSocket))
             {
                 if (webSocket == null || webSocket.State != WebSocketState.Open)
