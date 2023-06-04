@@ -8,7 +8,7 @@ namespace BluetoothHeartrateModule
 {
     public class BluetoothHeartrateProvider : HeartrateProvider
     {
-        private Dictionary<string, string?> potentialDevices = new();
+        private Dictionary<string, string?> deviceNames = new();
         private GattCharacteristic? heartRateCharacteristic;
         private HashSet<string> missingCharacteristicDevices = new();
         private bool processingData = false;
@@ -61,7 +61,7 @@ namespace BluetoothHeartrateModule
                 module.watcher.Received -= Watcher_Received;
                 module.watcher.Stopped -= Watcher_Stopped;
             }
-            potentialDevices.Clear();
+            deviceNames.Clear();
             missingCharacteristicDevices.Clear();
             ResetDevice();
             processingData = false;
@@ -87,19 +87,26 @@ namespace BluetoothHeartrateModule
 
             var advertisementMac = Converter.FormatAsMac(args.BluetoothAddress);
             var deviceMacSetting = module.GetDeviceMacSetting();
-            if (deviceMacSetting == string.Empty)
+            var isConfiguredDevice = advertisementMac == deviceMacSetting;
+            if (deviceMacSetting == string.Empty || isConfiguredDevice)
             {
-                var potentialDevicesValue = potentialDevices.GetValueOrDefault(advertisementMac, null);
-                if (potentialDevicesValue == null)
+                var deviceNamesValue = deviceNames.GetValueOrDefault(advertisementMac, null);
+                if (deviceNamesValue == null)
                 {
                     var advertisementDeviceName = await DeviceNameResolver.GetDeviceNameAsync(args.Advertisement, args.BluetoothAddress);
-                    potentialDevices[advertisementMac] = advertisementDeviceName;
-                    Log($"Discovered device: {advertisementDeviceName} (MAC: {advertisementMac})");
+                    deviceNames[advertisementMac] = advertisementDeviceName;
+                    if (!isConfiguredDevice)
+                    {
+                        Log($"Discovered device: {advertisementDeviceName} (MAC: {advertisementMac})");
+                    }
                 }
-                return;
+                if (!isConfiguredDevice)
+                {
+                    return;
+                }
             }
 
-            if (advertisementMac != deviceMacSetting)
+            if (!isConfiguredDevice)
             {
                 // Not the droid we're looking for
                 return;
@@ -117,7 +124,9 @@ namespace BluetoothHeartrateModule
                 if (currentDevice == null)
                 {
                     currentDevice = await BluetoothLEDevice.FromBluetoothAddressAsync(args.BluetoothAddress);
-                    Log($"Found device for MAC {advertisementMac}");
+                    var currentDeviceName = deviceNames[advertisementMac] ?? "Unknown";
+                    Log($"Found device named {currentDeviceName} for MAC {advertisementMac}");
+                    module.SetDeviceName(currentDeviceName);
                 }
 
                 var missungUnknown = !missingCharacteristicDevices.Contains(deviceMacSetting);

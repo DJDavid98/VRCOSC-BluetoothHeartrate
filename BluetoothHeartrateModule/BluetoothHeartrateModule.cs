@@ -40,6 +40,8 @@ namespace BluetoothHeartrateModule
             CreateSetting(BluetoothHeartrateSetting.WebsocketServerEnabled, @"Websocket Server Enabled", @"Broadcast the heartrate data over a local Websocket server", false);
             CreateSetting(BluetoothHeartrateSetting.WebsocketServerHost, @"Websocket Server Hostname", @"Hostname (IP address) for the Websocket server", "127.0.0.1", () => GetSetting<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled));
             CreateSetting(BluetoothHeartrateSetting.WebsocketServerPort, @"Websocket Server Port", @"Port for the Websocket server", 36210, () => GetSetting<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled));
+
+            CreateVariable(BluetoothHeartratevariable.DeviceName, @"Device Name", "device");
         }
 
         protected override async void OnModuleStart()
@@ -72,6 +74,17 @@ namespace BluetoothHeartrateModule
         {
             return GetSetting<int>(BluetoothHeartrateSetting.WebsocketServerPort);
         }
+
+        internal void StopWatcher()
+        {
+            watcher?.Stop();
+        }
+
+        internal void SetDeviceName(string deviceName)
+        {
+            SetVariableValue(BluetoothHeartratevariable.DeviceName, deviceName);
+        }
+
         private async void SendWebcoketHeartrate(int heartrate)
         {
             await wsServer.SendIntMessage(heartrate);
@@ -86,17 +99,17 @@ namespace BluetoothHeartrateModule
             }
         }
 
-        internal void StopWatcher()
-        {
-            watcher?.Stop();
-        }
-
         internal enum BluetoothHeartrateSetting
         {
             DeviceMac,
             WebsocketServerEnabled,
             WebsocketServerHost,
             WebsocketServerPort
+        }
+
+        internal enum BluetoothHeartratevariable
+        {
+            DeviceName
         }
     }
 }
