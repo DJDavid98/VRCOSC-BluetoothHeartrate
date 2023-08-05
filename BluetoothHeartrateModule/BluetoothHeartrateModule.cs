@@ -1,16 +1,14 @@
-﻿using VRCOSC.Game.Modules.Bases.Heartrate;
+﻿using VRCOSC.Game.Modules;
+using VRCOSC.Game.Modules.Bases.Heartrate;
 using Windows.Devices.Bluetooth.Advertisement;
 
 namespace BluetoothHeartrateModule
 {
+    [ModuleTitle("Bluetooth Heartrate")]
+    [ModuleDescription("Displays heartrate data from Bluetooth-based heartrate sensors")]
+    [ModuleAuthor("DJDavid98")]
     public partial class BluetoothHeartrateModule : HeartrateModule<BluetoothHeartrateProvider>
     {
-        public override string Title => "Bluetooth Heartrate";
-        public override string Description => "Displays heartrate data from Bluetooth-based heartrate sensors";
-        public override string Author => "DJDavid98";
-        public override ModuleType Type => ModuleType.Health;
-        protected override TimeSpan DeltaUpdate => TimeSpan.FromSeconds(1);
-
         private WebsocketHeartrateServer wsServer;
         internal BluetoothLEAdvertisementWatcher? watcher;
 
