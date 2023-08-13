@@ -93,7 +93,8 @@ namespace BluetoothHeartrateModule
                 var deviceNamesValue = deviceNames.GetValueOrDefault(advertisementMac, null);
                 if (deviceNamesValue == null)
                 {
-                    var advertisementDeviceName = await DeviceNameResolver.GetDeviceNameAsync(args.Advertisement, args.BluetoothAddress);
+                    var dnr = new DeviceNameResolver(module);
+                    var advertisementDeviceName = await dnr.GetDeviceNameAsync(args.Advertisement, args.BluetoothAddress);
                     deviceNames[advertisementMac] = advertisementDeviceName;
                     if (!isConfiguredDevice)
                     {
