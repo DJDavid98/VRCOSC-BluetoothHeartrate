@@ -9,16 +9,18 @@ namespace BluetoothHeartrateModule
     public class BluetoothHeartrateProvider : HeartrateProvider
     {
         private Dictionary<string, string?> deviceNames = new();
+        private GattDeviceService? heartRateService;
         private GattCharacteristic? heartRateCharacteristic;
         private HashSet<string> missingCharacteristicDevices = new();
         private bool processingData = false;
         BluetoothLEDevice? currentDevice;
         private readonly BluetoothHeartrateModule module;
-        public override bool IsConnected => currentDevice != null && heartRateCharacteristic != null;
+        public override bool IsConnected => currentDevice != null && heartRateCharacteristic != null && currentDevice.ConnectionStatus == BluetoothConnectionStatus.Connected;
 
         public BluetoothHeartrateProvider(BluetoothHeartrateModule module)
         {
             this.module = module;
+
         }
 
         public override void Initialise()
@@ -35,15 +37,7 @@ namespace BluetoothHeartrateModule
             }
 
             module.watcher.Received += Watcher_Received;
-            module.watcher.Stopped += Watcher_Stopped;
-            switch (module.watcher.Status)
-            {
-                case BluetoothLEAdvertisementWatcherStatus.Stopped:
-                case BluetoothLEAdvertisementWatcherStatus.Created:
-                    module.watcher.Start();
-                    Log("Watching for devices");
-                    break;
-            }
+            module.StartWatcher();
         }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously
@@ -59,7 +53,6 @@ namespace BluetoothHeartrateModule
             if (module.watcher != null)
             {
                 module.watcher.Received -= Watcher_Received;
-                module.watcher.Stopped -= Watcher_Stopped;
             }
             deviceNames.Clear();
             missingCharacteristicDevices.Clear();
@@ -67,16 +60,43 @@ namespace BluetoothHeartrateModule
             processingData = false;
         }
 
-        private void ResetDevice()
+        private async void ResetDevice()
         {
+            if (heartRateService != null)
+            {
+                try
+                {
+                    heartRateService.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Ignore if object is already disposed
+                }
+                heartRateService = null;
+            }
             if (heartRateCharacteristic != null)
             {
-                heartRateCharacteristic.ValueChanged -= HeartRateCharacteristic_ValueChanged;
+                try
+                {
+                    heartRateCharacteristic.ValueChanged -= HeartRateCharacteristic_ValueChanged;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Ignore if object is already disposed
+                }
                 heartRateCharacteristic = null;
             }
             if (currentDevice != null)
             {
-                currentDevice.Dispose();
+                try
+                {
+                    currentDevice.ConnectionStatusChanged -= Device_ConnectionStatusChanged;
+                    currentDevice.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Ignore if object is already disposed
+                }
                 currentDevice = null;
             }
         }
@@ -128,13 +148,15 @@ namespace BluetoothHeartrateModule
                     var currentDeviceName = deviceNames[advertisementMac] ?? "Unknown";
                     Log($"Found device named {currentDeviceName} for MAC {advertisementMac}");
                     module.SetDeviceName(currentDeviceName);
+                    currentDevice.ConnectionStatusChanged += Device_ConnectionStatusChanged;
                 }
 
                 var missungUnknown = !missingCharacteristicDevices.Contains(deviceMacSetting);
                 var services = await currentDevice.GetGattServicesForUuidAsync(GattServiceUuids.HeartRate, BluetoothCacheMode.Uncached);
                 if (services.Services.Count > 0)
                 {
-                    var firstService = services.Services[0];
+                    IEnumerable<GattDeviceService> cleanupServices = services.Services;
+                    var firstService = cleanupServices.First();
                     if (missungUnknown)
                     {
                         Log("Found heartrate service");
@@ -144,6 +166,7 @@ namespace BluetoothHeartrateModule
                     {
                         if (heartRateCharacteristic == null)
                         {
+                            heartRateService = firstService;
                             heartRateCharacteristic = characteristics.Characteristics[0];
                             Log("Found heartrate measurement characteristic");
 
@@ -162,6 +185,8 @@ namespace BluetoothHeartrateModule
                                 }
                                 OnConnected?.Invoke();
                                 Log("Connection successful");
+                                module.StopWatcher();
+                                cleanupServices = services.Services.Skip(1);
                             }
                             else
                             {
@@ -169,9 +194,10 @@ namespace BluetoothHeartrateModule
                             }
                         }
                     }
-                    else
+
+                    if (cleanupServices.Any())
                     {
-                        foreach (var service in services.Services)
+                        foreach (var service in cleanupServices)
                             service.Dispose();
                     }
                 }
@@ -201,10 +227,13 @@ namespace BluetoothHeartrateModule
             OnHeartrateUpdate?.Invoke(data[1]);
         }
 
-        private void Watcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args)
+        private async void Device_ConnectionStatusChanged(BluetoothLEDevice sender, object args)
         {
-            Log("Watcher stopped");
-            OnDisconnected?.Invoke();
+            if (sender.ConnectionStatus == BluetoothConnectionStatus.Disconnected)
+            {
+                Log("Current device disconected");
+                OnDisconnected?.Invoke();
+            }
         }
     }
 }

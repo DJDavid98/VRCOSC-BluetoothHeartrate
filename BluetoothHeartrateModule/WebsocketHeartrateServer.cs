@@ -109,12 +109,6 @@ namespace BluetoothHeartrateModule
         // Public method to send an int message to all clients
         internal async Task SendIntMessage(int message)
         {
-            if (!module.GetWebocketEnabledSetting())
-            {
-                Stop();
-                return;
-            }
-
             var messageBuffer = new ArraySegment<byte>(Converter.GetAsciiStringInt(message));
             foreach (var clientId in connectedClients.Keys)
             {

@@ -19,7 +19,6 @@ namespace BluetoothHeartrateModule
 
         protected override BluetoothHeartrateProvider CreateProvider()
         {
-            watcher = new BluetoothLEAdvertisementWatcher { ScanningMode = BluetoothLEScanningMode.Active };
             var provider = new BluetoothHeartrateProvider(this);
             provider.OnHeartrateUpdate += SendWebcoketHeartrate;
             return provider;
@@ -44,15 +43,21 @@ namespace BluetoothHeartrateModule
 
         protected override async void OnModuleStart()
         {
-            ResetWatcher();
+            CreateWatcher();
             base.OnModuleStart();
-            await wsServer.Start();
+            if (GetWebocketEnabledSetting())
+            {
+                await wsServer.Start();
+            }
         }
 
         protected override void OnModuleStop()
         {
-            ResetWatcher();
-            wsServer.Stop();
+            StopWatcher();
+            if (GetWebocketEnabledSetting())
+            {
+                wsServer.Stop();
+            }
             base.OnModuleStop();
         }
 
@@ -73,11 +78,6 @@ namespace BluetoothHeartrateModule
             return GetSetting<int>(BluetoothHeartrateSetting.WebsocketServerPort);
         }
 
-        internal void StopWatcher()
-        {
-            watcher?.Stop();
-        }
-
         internal void SetDeviceName(string deviceName)
         {
             SetVariableValue(BluetoothHeartratevariable.DeviceName, deviceName);
@@ -85,16 +85,62 @@ namespace BluetoothHeartrateModule
 
         private async void SendWebcoketHeartrate(int heartrate)
         {
+            if (!GetWebocketEnabledSetting())
+            {
+                return;
+            }
+
             await wsServer.SendIntMessage(heartrate);
         }
+        internal BluetoothLEAdvertisementWatcher CreateWatcher()
+        {
+            if (watcher == null)
+            {
+                watcher = new BluetoothLEAdvertisementWatcher { ScanningMode = BluetoothLEScanningMode.Active };
+                watcher.Stopped += Watcher_Stopped;
+            }
+            return watcher;
+        }
 
-        private void ResetWatcher()
+        private void Watcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args)
+        {
+            string scanStatus;
+            bool invokeDisconnect = true;
+            switch (args.Error)
+            {
+                case Windows.Devices.Bluetooth.BluetoothError.RadioNotAvailable:
+                    scanStatus = "Bluetooth adapter/module is disconnected";
+                    break;
+                case Windows.Devices.Bluetooth.BluetoothError.Success:
+                    scanStatus = "device found";
+                    invokeDisconnect = false;
+                    break;
+                default:
+                    scanStatus = args.Error.ToString();
+                    break;
+            }
+            Log($"Stopped scanning for devices ({scanStatus})");
+            if (invokeDisconnect)
+            {
+                HeartrateProvider?.OnDisconnected?.Invoke();
+            }
+        }
+
+        internal void StartWatcher()
         {
             if (watcher != null)
             {
-                StopWatcher();
-                watcher = null;
+                if (watcher.Status != BluetoothLEAdvertisementWatcherStatus.Started)
+                {
+                    watcher.Start();
+                    Log("Scanning for devices");
+                }
             }
+        }
+
+        internal void StopWatcher()
+        {
+            watcher?.Stop();
         }
 
         internal enum BluetoothHeartrateSetting
