@@ -1,7 +1,8 @@
 <h1><img src="BluetoothHeartrateModule/logo/logo.png" width="32"> VRCOSC Bluetooth Heartrate</h1>
 
 A Bluetooth Low Energy (BLE) heartrate sensor module for [VRCOSC] based on the original [HeartrateModule].
- Tested with a Polar H10 but should work with any BLE-compliant device in theory.
+While any BLE-compliant device should work in theory, I have tested this with a Polar H10.
+Additionally a community member confirmed this to be working with the Coospo H808S.
 
 [VRCOSC]: https://github.com/VolcanicArts/VRCOSC
 [HeartrateModule]: https://github.com/VolcanicArts/VRCOSC/blob/2022.1219.0/VRCOSC.Game/Modules/Modules/Heartrate/HeartRateModule.cs
