@@ -100,7 +100,7 @@ namespace BluetoothHeartrateModule
 
         private void StopHttpListener()
         {
-            if (httpListener?.IsListening == true)
+            if (IsListening())
             {
                 httpListener.Stop();
             }
@@ -131,9 +131,12 @@ namespace BluetoothHeartrateModule
         // Public method to stop the server
         internal void Stop()
         {
-            module.Log($"WebSocket server stopping");
-            ResetServerCancellation();
-            StopHttpListener();
+            if (IsListening())
+            {
+                module.Log($"WebSocket server stopping");
+                ResetServerCancellation();
+                StopHttpListener();
+            }
         }
 
         private string GetListenAddress()
@@ -143,6 +146,10 @@ namespace BluetoothHeartrateModule
         private string GetListenAddress(string protocol)
         {
             return $"{protocol}://{module.GetWebocketHostSetting()}:{module.GetWebocketPortSetting()}/";
+        }
+        private bool IsListening()
+        {
+            return httpListener?.IsListening;
         }
         private async Task HandleWebSocketConnection(Guid clientId, WebSocket webSocket)
         {
