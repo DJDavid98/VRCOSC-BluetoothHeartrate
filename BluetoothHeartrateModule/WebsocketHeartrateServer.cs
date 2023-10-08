@@ -21,19 +21,27 @@ namespace BluetoothHeartrateModule
 
         internal async Task Start()
         {
+            module.LogDebug("Starting WebSocket server");
+
+            module.LogDebug("Clearing connected clients");
             connectedClients.Clear();
+            module.LogDebug("Resetting server cancellation token");
             ResetServerCancellation();
 
             if (!module.GetWebocketEnabledSetting())
             {
+                module.LogDebug("WebSocket server is disabled, start aborted");
                 return;
             }
+            module.LogDebug("Creating new cancellation token");
             serverCancellation = new CancellationTokenSource();
 
-            var httpAddress = GetListenAddress();
+            module.LogDebug("Determining listen addresses");
+            var httpAddress = GetListenAddress("http");
             var wsAddress = GetListenAddress("ws");
             if (httpListener == null)
             {
+                module.LogDebug("Creating HTTP listener");
                 httpListener = new HttpListener();
                 httpListener.Prefixes.Add(httpAddress);
             }
@@ -61,10 +69,13 @@ namespace BluetoothHeartrateModule
                     var context = await httpListener.GetContextAsync();
                     if (context.Request.IsWebSocketRequest)
                     {
+                        module.LogDebug("Accepting WebSocket request");
                         var webSocketContext = await context.AcceptWebSocketAsync(null);
                         var clientId = Guid.NewGuid();
+                        module.LogDebug("Storing connected client");
                         connectedClients.TryAdd(clientId, webSocketContext.WebSocket);
                         module.Log($"Websocket client {clientId} connected.");
+                        module.LogDebug("Invoking OnClientConnect action");
                         OnClientConnect?.Invoke(clientId);
 
                         _ = HandleWebSocketConnection(clientId, webSocketContext.WebSocket);
@@ -79,6 +90,7 @@ namespace BluetoothHeartrateModule
             catch (Exception ex) when (ex is HttpListenerException || ex is OperationCanceledException)
             {
                 // Ignore exceptions caused by stopping the server
+                module.LogDebug("Caught exception while stopping WebSocket server");
             }
             finally
             {
@@ -92,6 +104,7 @@ namespace BluetoothHeartrateModule
         {
             if (serverCancellation != null)
             {
+                module.LogDebug("Resetting server cancellation");
                 serverCancellation.Cancel();
                 serverCancellation.Dispose();
                 serverCancellation = null;
@@ -102,6 +115,7 @@ namespace BluetoothHeartrateModule
         {
             if (httpListener?.IsListening == true)
             {
+                module.LogDebug("Stopping HTTP listener");
                 httpListener.Stop();
             }
         }
@@ -109,6 +123,7 @@ namespace BluetoothHeartrateModule
         // Public method to send an int message to all clients
         internal async Task SendIntMessage(int message)
         {
+            module.LogDebug($"Sending message {message} to all clients");
             var messageBuffer = new ArraySegment<byte>(Converter.GetAsciiStringInt(message));
             foreach (var clientId in connectedClients.Keys)
             {
@@ -118,6 +133,7 @@ namespace BluetoothHeartrateModule
         // Public method to send an int message to specific client
         internal async Task SendIntMessage(int message, Guid clientId)
         {
+            module.LogDebug($"Sending message {message} to client {clientId}");
             var messageBuffer = new ArraySegment<byte>(Converter.GetAsciiStringInt(message));
             await SendMessage(clientId, messageBuffer);
         }
@@ -130,10 +146,6 @@ namespace BluetoothHeartrateModule
             StopHttpListener();
         }
 
-        private string GetListenAddress()
-        {
-            return GetListenAddress("http");
-        }
         private string GetListenAddress(string protocol)
         {
             return $"{protocol}://{module.GetWebocketHostSetting()}:{module.GetWebocketPortSetting()}/";
@@ -160,11 +172,12 @@ namespace BluetoothHeartrateModule
 
         private async void DisconnectClient(Guid clientId)
         {
+            module.LogDebug($"Disconnecting client {clientId}");
             WebSocket? removedClient;
             connectedClients.TryRemove(clientId, out removedClient);
             if (removedClient != null)
             {
-                await removedClient.CloseAsync(WebSocketCloseStatus.EndpointUnavailable, null, new CancellationToken());
+                await removedClient.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
                 removedClient.Dispose();
             }
             module.Log($"WebSocket client {clientId} disconnected.");
@@ -175,19 +188,23 @@ namespace BluetoothHeartrateModule
         {
             if (!module.GetWebocketEnabledSetting())
             {
+                module.LogDebug("WebSocket server found to be disbled while sending message, stopping");
                 Stop();
                 return;
             }
 
+            module.LogDebug($"Trying to find client {clientId} for messaging");
             if (connectedClients.TryGetValue(clientId, out WebSocket? webSocket))
             {
                 if (webSocket == null || webSocket.State != WebSocketState.Open)
                 {
+                    module.LogDebug($"Cound not find open socket for client {clientId}, skipping");
                     return;
                 }
 
                 try
                 {
+                    module.LogDebug($"Sending message to client {clientId}");
                     await webSocket.SendAsync(buffer, WebSocketMessageType.Text, true, CancellationToken.None);
                 }
                 catch (WebSocketException ex)

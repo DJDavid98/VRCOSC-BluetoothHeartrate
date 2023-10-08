@@ -19,6 +19,7 @@ namespace BluetoothHeartrateModule
 
         protected override BluetoothHeartrateProvider CreateProvider()
         {
+            LogDebug("Creating provider");
             var provider = new BluetoothHeartrateProvider(this);
             provider.OnHeartrateUpdate += SendWebcoketHeartrate;
             return provider;
@@ -29,8 +30,14 @@ namespace BluetoothHeartrateModule
             base.Log(message);
         }
 
+        internal new void LogDebug(string message)
+        {
+            base.LogDebug(message);
+        }
+
         protected override void CreateAttributes()
         {
+            LogDebug("Creating attributes");
             base.CreateAttributes();
             CreateSetting(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty);
 
@@ -43,19 +50,23 @@ namespace BluetoothHeartrateModule
 
         protected override async void OnModuleStart()
         {
+            LogDebug("Starting module");
             CreateWatcher();
             base.OnModuleStart();
             if (GetWebocketEnabledSetting())
             {
+                LogDebug("Starting wsServer");
                 await wsServer.Start();
             }
         }
 
         protected override void OnModuleStop()
         {
+            LogDebug("Stopping module");
             StopWatcher();
             if (GetWebocketEnabledSetting())
             {
+                LogDebug("Stopping wsServer");
                 wsServer.Stop();
             }
             base.OnModuleStop();
@@ -87,6 +98,7 @@ namespace BluetoothHeartrateModule
         {
             if (!GetWebocketEnabledSetting())
             {
+                LogDebug("Not sending HR to websocket because it is disabled");
                 return;
             }
 
@@ -96,7 +108,9 @@ namespace BluetoothHeartrateModule
         {
             if (watcher == null)
             {
+                LogDebug("Creating new watcher");
                 watcher = new BluetoothLEAdvertisementWatcher { ScanningMode = BluetoothLEScanningMode.Active };
+                LogDebug("Adding watcher stopped event handler");
                 watcher.Stopped += Watcher_Stopped;
             }
             return watcher;
@@ -104,6 +118,7 @@ namespace BluetoothHeartrateModule
 
         private void Watcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args)
         {
+            LogDebug($"Watcher stopped, error: {args.Error}");
             string scanStatus;
             bool invokeDisconnect = true;
             switch (args.Error)
@@ -122,6 +137,7 @@ namespace BluetoothHeartrateModule
             Log($"Stopped scanning for devices ({scanStatus})");
             if (invokeDisconnect)
             {
+                LogDebug("Invoking OnDisconnected action");
                 HeartrateProvider?.OnDisconnected?.Invoke();
             }
         }
@@ -130,6 +146,7 @@ namespace BluetoothHeartrateModule
         {
             if (watcher != null)
             {
+                LogDebug($"Starting watcher, current status: {watcher.Status}");
                 if (watcher.Status != BluetoothLEAdvertisementWatcherStatus.Started)
                 {
                     watcher.Start();
@@ -140,6 +157,7 @@ namespace BluetoothHeartrateModule
 
         internal void StopWatcher()
         {
+            LogDebug("Stopping watcher");
             watcher?.Stop();
         }
 
