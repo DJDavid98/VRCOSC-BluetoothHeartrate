@@ -18,6 +18,12 @@
 		<PackageReference Include="VolcanicArts.VRCOSC.SDK" Version="2023.1122.0" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <None Update="Microsoft.Windows.SDK.NET.dll">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
 		<Exec Command="xcopy /F /Y &quot;$(TargetDir)$(TargetName).dll&quot; &quot;%25appdata%25\VRCOSC-V2\packages\local\$(TargetName).dll&quot;" />
 		<Exec Command="xcopy /F /Y &quot;$(TargetDir)Microsoft.Windows.SDK.NET.dll&quot; &quot;%25appdata%25\VRCOSC-V2\packages\local\Microsoft.Windows.SDK.NET.dll&quot;" />
