@@ -1,4 +1,4 @@
-﻿using VRCOSC.Game.Modules.Bases.Heartrate;
+﻿using VRCOSC.Game.SDK.Modules.Heartrate;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
@@ -23,7 +23,7 @@ namespace BluetoothHeartrateModule
 
         }
 
-        public override void Initialise()
+        public override async Task<bool> Initialise()
         {
             module.LogDebug("Initializing BluetoothHeartrateProvider");
             if (module.GetDeviceMacSetting() == string.Empty)
@@ -34,13 +34,14 @@ namespace BluetoothHeartrateModule
             if (module.watcher == null)
             {
                 Log("Watcher is not defined");
-                return;
+                return false;
             }
 
             module.LogDebug("Registering watcher received handler");
             module.watcher.Received += Watcher_Received;
             module.LogDebug("Starting watcher");
             module.StartWatcher();
+            return true;
         }
 
 #pragma warning disable CS1998 // Async method lacks 'await' operators and will run synchronously

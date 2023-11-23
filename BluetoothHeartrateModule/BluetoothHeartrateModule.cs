@@ -1,12 +1,11 @@
-﻿using VRCOSC.Game.Modules;
-using VRCOSC.Game.Modules.Bases.Heartrate;
+﻿using VRCOSC.Game.SDK;
 using Windows.Devices.Bluetooth.Advertisement;
+using VRCOSC.Game.SDK.Modules.Heartrate;
 
 namespace BluetoothHeartrateModule
 {
     [ModuleTitle("Bluetooth Heartrate")]
     [ModuleDescription("Displays heartrate data from Bluetooth-based heartrate sensors")]
-    [ModuleAuthor("DJDavid98")]
     public partial class BluetoothHeartrateModule : HeartrateModule<BluetoothHeartrateProvider>
     {
         private WebsocketHeartrateServer wsServer;
@@ -32,35 +31,53 @@ namespace BluetoothHeartrateModule
 
         internal new void LogDebug(string message)
         {
-            base.LogDebug(message);
+            base.Log(message);
+            // No debug logs in V2 yet
+            // base.LogDebug(message);
         }
 
-        protected override void CreateAttributes()
+        protected override void OnLoad()
         {
-            LogDebug("Creating attributes");
-            base.CreateAttributes();
-            CreateSetting(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty);
+            LogDebug("OnLoad");
+            base.OnLoad();
+            CreateTextBox(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty);
 
-            CreateSetting(BluetoothHeartrateSetting.WebsocketServerEnabled, @"Websocket Server Enabled", @"Broadcast the heartrate data over a local Websocket server", false);
-            CreateSetting(BluetoothHeartrateSetting.WebsocketServerHost, @"Websocket Server Hostname", @"Hostname (IP address) for the Websocket server", "127.0.0.1", () => GetSetting<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled));
-            CreateSetting(BluetoothHeartrateSetting.WebsocketServerPort, @"Websocket Server Port", @"Port for the Websocket server", 36210, () => GetSetting<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled));
+            CreateToggle(BluetoothHeartrateSetting.WebsocketServerEnabled, @"Websocket Server Enabled", @"Broadcast the heartrate data over a local Websocket server", false);
+            CreateTextBox(BluetoothHeartrateSetting.WebsocketServerHost, @"Websocket Server Hostname", @"Hostname (IP address) for the Websocket server", "127.0.0.1");
+            CreateTextBox(BluetoothHeartrateSetting.WebsocketServerPort, @"Websocket Server Port", @"Port for the Websocket server", 36210);
 
-            CreateVariable(BluetoothHeartratevariable.DeviceName, @"Device Name", "device");
+            // TODO After chatbox support lands in V2
+            // CreateVariable(BluetoothHeartratevariable.DeviceName, @"Device Name", "device");
         }
 
-        protected override async void OnModuleStart()
+        protected override void OnPostLoad()
+        {
+            var wsServerHostSetting = GetSetting(BluetoothHeartrateSetting.WebsocketServerHost);
+            if (wsServerHostSetting != null)
+            {
+                wsServerHostSetting.IsEnabled = () => GetSettingValue<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled);
+            }
+            var wsServerPortSetting = GetSetting(BluetoothHeartrateSetting.WebsocketServerPort);
+            if (wsServerPortSetting != null)
+            {
+                wsServerPortSetting.IsEnabled = () => GetSettingValue<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled);
+            }
+        }
+
+        protected override async Task<bool> OnModuleStart()
         {
             LogDebug("Starting module");
             CreateWatcher();
-            base.OnModuleStart();
+            await base.OnModuleStart();
             if (GetWebocketEnabledSetting())
             {
                 LogDebug("Starting wsServer");
                 await wsServer.Start();
             }
+            return true;
         }
 
-        protected override void OnModuleStop()
+        protected override async Task<bool> OnModuleStop()
         {
             LogDebug("Stopping module");
             StopWatcher();
@@ -69,29 +86,31 @@ namespace BluetoothHeartrateModule
                 LogDebug("Stopping wsServer");
                 wsServer.Stop();
             }
-            base.OnModuleStop();
+            await base.OnModuleStop();
+            return true;
         }
 
         internal string GetDeviceMacSetting()
         {
-            return GetSetting<string>(BluetoothHeartrateSetting.DeviceMac);
+            return GetSettingValue<string>(BluetoothHeartrateSetting.DeviceMac) ?? "";
         }
         internal bool GetWebocketEnabledSetting()
         {
-            return GetSetting<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled);
+            return GetSettingValue<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled);
         }
         internal string GetWebocketHostSetting()
         {
-            return GetSetting<string>(BluetoothHeartrateSetting.WebsocketServerHost);
+            return GetSettingValue<string>(BluetoothHeartrateSetting.WebsocketServerHost) ?? "";
         }
         internal int GetWebocketPortSetting()
         {
-            return GetSetting<int>(BluetoothHeartrateSetting.WebsocketServerPort);
+            return GetSettingValue<int>(BluetoothHeartrateSetting.WebsocketServerPort);
         }
 
         internal void SetDeviceName(string deviceName)
         {
-            SetVariableValue(BluetoothHeartratevariable.DeviceName, deviceName);
+            // TODO After chatbox support lands in V2
+            // SetVariableValue(BluetoothHeartratevariable.DeviceName, deviceName);
         }
 
         private async void SendWebcoketHeartrate(int heartrate)
