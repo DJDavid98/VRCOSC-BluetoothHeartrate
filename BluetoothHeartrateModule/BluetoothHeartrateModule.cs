@@ -31,7 +31,6 @@ namespace BluetoothHeartrateModule
 
         internal new void LogDebug(string message)
         {
-            base.Log(message);
             // No debug logs in V2 yet
             // base.LogDebug(message);
         }
