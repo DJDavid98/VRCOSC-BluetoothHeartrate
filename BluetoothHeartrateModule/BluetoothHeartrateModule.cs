@@ -31,15 +31,14 @@ namespace BluetoothHeartrateModule
 
         internal new void LogDebug(string message)
         {
-            // No debug logs in V2 yet
-            // base.LogDebug(message);
+            base.LogDebug(message);
         }
 
         protected override void OnLoad()
         {
             LogDebug("OnLoad");
             base.OnLoad();
-            CreateTextBox(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty);
+            CreateTextBox(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty, true);
 
             CreateToggle(BluetoothHeartrateSetting.WebsocketServerEnabled, @"Websocket Server Enabled", @"Broadcast the heartrate data over a local Websocket server", false);
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerHost, @"Websocket Server Hostname", @"Hostname (IP address) for the Websocket server", "127.0.0.1");
@@ -71,7 +70,7 @@ namespace BluetoothHeartrateModule
             if (GetWebocketEnabledSetting())
             {
                 LogDebug("Starting wsServer");
-                await wsServer.Start();
+                _ = wsServer.Start();
             }
             return true;
         }

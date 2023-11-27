@@ -12,6 +12,7 @@ namespace BluetoothHeartrateModule
         private GattDeviceService? heartRateService;
         private GattCharacteristic? heartRateCharacteristic;
         private HashSet<string> missingCharacteristicDevices = new();
+        private CancellationTokenSource watcherStopper = new();
         private bool processingData = false;
         BluetoothLEDevice? currentDevice;
         private readonly BluetoothHeartrateModule module;
@@ -40,6 +41,8 @@ namespace BluetoothHeartrateModule
             module.LogDebug("Registering watcher received handler");
             module.watcher.Received += Watcher_Received;
             module.LogDebug("Starting watcher");
+            watcherStopper = new();
+            module.LogDebug("Generated new watcherStopper");
             module.StartWatcher();
             return true;
         }
@@ -54,6 +57,8 @@ namespace BluetoothHeartrateModule
         private void Reset()
         {
             module.LogDebug("Resetting provider");
+            watcherStopper.Cancel();
+            module.LogDebug("Cancelled watcherStopper");
             if (module.watcher != null)
             {
                 module.LogDebug("Unregistering watcher received handler");
@@ -121,6 +126,7 @@ namespace BluetoothHeartrateModule
             var advertisementId = Guid.NewGuid().ToString();
             // We need a prefix to follow the logs as advertisements can come in pretty rapidly
             var logPrefix = $"[{advertisementId}]";
+            var cancelMessage = $"{logPrefix} Watcher cancelled, discarding advertisement";
             module.LogDebug($"{logPrefix} Watcher received advertisement");
             var advertisementMac = Converter.FormatAsMac(args.BluetoothAddress);
             module.LogDebug($"{logPrefix} advertisementMac = {advertisementMac}");
@@ -138,6 +144,11 @@ namespace BluetoothHeartrateModule
                     var dnr = new DeviceNameResolver(module);
                     module.LogDebug($"{logPrefix} Resolving device name");
                     var resolvedDeviceName = await dnr.GetDeviceNameAsync(args.Advertisement, args.BluetoothAddress);
+                    if (watcherStopper.IsCancellationRequested)
+                    {
+                        module.LogDebug(cancelMessage);
+                        return;
+                    }
                     module.LogDebug($"{logPrefix} Caching device name");
                     deviceNames[advertisementMac] = resolvedDeviceName;
                     if (!isConfiguredDevice)
@@ -173,6 +184,11 @@ namespace BluetoothHeartrateModule
                 {
                     module.LogDebug($"{logPrefix} Setting currrent device");
                     currentDevice = await BluetoothLEDevice.FromBluetoothAddressAsync(args.BluetoothAddress);
+                    if (watcherStopper.IsCancellationRequested)
+                    {
+                        module.LogDebug(cancelMessage);
+                        return;
+                    }
                     var currentDeviceName = deviceNames[advertisementMac] ?? "Unknown";
                     Log($"Found device named {currentDeviceName} for MAC {advertisementMac}");
                     module.SetDeviceName(currentDeviceName);
@@ -188,6 +204,11 @@ namespace BluetoothHeartrateModule
                 module.LogDebug($"{logPrefix} missungUnknown = {missungUnknown}");
                 module.LogDebug($"{logPrefix} Finding HeratRate service");
                 var services = await currentDevice.GetGattServicesForUuidAsync(GattServiceUuids.HeartRate, BluetoothCacheMode.Uncached);
+                if (watcherStopper.IsCancellationRequested)
+                {
+                    module.LogDebug(cancelMessage);
+                    return;
+                }
                 if (services.Services.Count > 0)
                 {
                     module.LogDebug($"{logPrefix} Queueuing all found services for cleanup");
@@ -198,6 +219,11 @@ namespace BluetoothHeartrateModule
                         Log("Found heartrate service");
                     }
                     var characteristics = await firstService.GetCharacteristicsForUuidAsync(GattCharacteristicUuids.HeartRateMeasurement, BluetoothCacheMode.Uncached);
+                    if (watcherStopper.IsCancellationRequested)
+                    {
+                        module.LogDebug(cancelMessage);
+                        return;
+                    }
                     module.LogDebug($"{logPrefix} Finding HeartRateMeasurement characteristic");
                     if (characteristics.Characteristics.Count > 0)
                     {
@@ -213,6 +239,11 @@ namespace BluetoothHeartrateModule
                             // Enable notifications for heart rate measurements
                             Log("Writing client characteristic configuration descriptor");
                             var status = await heartRateCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue.Notify);
+                            if (watcherStopper.IsCancellationRequested)
+                            {
+                                module.LogDebug(cancelMessage);
+                                return;
+                            }
                             if (status == GattCommunicationStatus.Success)
                             {
                                 // Remove receive handler
