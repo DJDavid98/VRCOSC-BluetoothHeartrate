@@ -72,7 +72,7 @@ namespace BluetoothHeartrateModule
             }
             catch (Exception ex)
             {
-                module.Log($"Could not get device name for address {Converter.FormatAsMac(bluetoothAddress)}: {ex.Message}\n{ex.StackTrace}");
+                module.LogDebug($"Could not get device name for address {Converter.FormatAsMac(bluetoothAddress)}: {ex.Message}\n{ex.StackTrace}");
             }
             return GetDeviceNameOrFallback(deviceName);
         }
