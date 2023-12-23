@@ -50,6 +50,7 @@ namespace BluetoothHeartrateModule
 
         protected override void OnPostLoad()
         {
+            base.OnPostLoad();
             var wsServerHostSetting = GetSetting(BluetoothHeartrateSetting.WebsocketServerHost);
             if (wsServerHostSetting != null)
             {
