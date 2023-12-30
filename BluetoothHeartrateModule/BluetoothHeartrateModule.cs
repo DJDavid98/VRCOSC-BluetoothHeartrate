@@ -1,6 +1,6 @@
-﻿using VRCOSC.Game.SDK;
+﻿using VRCOSC.SDK;
 using Windows.Devices.Bluetooth.Advertisement;
-using VRCOSC.Game.SDK.Modules.Heartrate;
+using VRCOSC.SDK.Modules.Heartrate;
 
 namespace BluetoothHeartrateModule
 {

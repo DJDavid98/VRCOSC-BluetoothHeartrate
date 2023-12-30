@@ -1,4 +1,4 @@
-﻿using VRCOSC.Game.SDK.Modules.Heartrate;
+﻿using VRCOSC.SDK.Modules.Heartrate;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
