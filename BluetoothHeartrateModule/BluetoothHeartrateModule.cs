@@ -9,18 +9,20 @@ namespace BluetoothHeartrateModule
     [ModuleAuthor("DJDavid98")]
     public partial class BluetoothHeartrateModule : HeartrateModule<BluetoothHeartrateProvider>
     {
-        private WebsocketHeartrateServer wsServer;
+        private readonly WebsocketHeartrateServer wsServer;
         internal BluetoothLEAdvertisementWatcher? watcher;
+        internal AsyncHelper ah;
 
         public BluetoothHeartrateModule()
         {
-            wsServer = new WebsocketHeartrateServer(this);
+            ah = new AsyncHelper(this);
+            wsServer = new WebsocketHeartrateServer(this, ah);
         }
 
         protected override BluetoothHeartrateProvider CreateProvider()
         {
             LogDebug("Creating provider");
-            var provider = new BluetoothHeartrateProvider(this);
+            var provider = new BluetoothHeartrateProvider(this, ah);
             provider.OnHeartrateUpdate += SendWebcoketHeartrate;
             return provider;
         }
@@ -52,6 +54,7 @@ namespace BluetoothHeartrateModule
         {
             LogDebug("Starting module");
             CreateWatcher();
+            LogDebug("Call base class OnModuleStart");
             base.OnModuleStart();
             if (GetWebocketEnabledSetting())
             {
@@ -69,6 +72,7 @@ namespace BluetoothHeartrateModule
                 LogDebug("Stopping wsServer");
                 wsServer.Stop();
             }
+            LogDebug("Call base class OnModuleStop");
             base.OnModuleStop();
         }
 
@@ -142,17 +146,26 @@ namespace BluetoothHeartrateModule
             }
         }
 
-        internal void StartWatcher()
+        internal bool StartWatcher()
         {
             if (watcher != null)
             {
                 LogDebug($"Starting watcher, current status: {watcher.Status}");
                 if (watcher.Status != BluetoothLEAdvertisementWatcherStatus.Started)
                 {
-                    watcher.Start();
-                    Log("Scanning for devices");
+                    try
+                    {
+                        watcher.Start();
+                        var deviceMacSetting = GetDeviceMacSetting();
+                        Log($"Scanning for {(deviceMacSetting == string.Empty ? "devices" : $"device with MAC {deviceMacSetting}")}");
+                    } catch (Exception ex)
+                    {
+                        Log($"Could not start scanning for devices: {ex.Message}");
+                        return false;
+                    }
                 }
             }
+            return true;
         }
 
         internal void StopWatcher()
