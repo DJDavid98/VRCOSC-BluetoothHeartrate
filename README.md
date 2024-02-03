@@ -2,7 +2,7 @@
 
 A Bluetooth Low Energy (BLE) heartrate sensor module for [VRCOSC] based on the original [HeartrateModule].
 While any BLE-compliant device should work in theory, I have tested this with a Polar H10.
-Additionally a community member confirmed this to be working with the Coospo H808S.
+Additionally, a community member confirmed this to be working with the Coospo H808S.
 
 [VRCOSC]: https://github.com/VolcanicArts/VRCOSC
 [HeartrateModule]: https://github.com/VolcanicArts/VRCOSC/blob/2022.1219.0/VRCOSC.Game/Modules/Modules/Heartrate/HeartRateModule.cs
@@ -47,8 +47,7 @@ If everything went well, you should see the following messages:
 > \[Bluetooth Heartrate]: Found device for MAC XX:XX:XX:XX:XX:XX<br>
 > \[Bluetooth Heartrate]: Found heartrate service<br>
 > \[Bluetooth Heartrate]: Found heartrate measurement characteristic<br>
-> \[Bluetooth Heartrate]: Registered heartrate characteristic value change handler<br>
-> \[Bluetooth Heartrate]: Writing client characteristic configuration descriptor<br>
+> \[Bluetooth Heartrate]: Requesting characteristic notifications<br>
 > \[Bluetooth Heartrate]: Connection successful
 
 [Releases]: https://github.com/DJDavid98/VRCOSC-BluetoothHeartrate/releases

@@ -6,17 +6,16 @@ namespace BluetoothHeartrateModule
 {
     internal class WebsocketHeartrateServer
     {
+        private readonly BluetoothHeartrateModule module;
+        private readonly AsyncHelper ah;
+        private static readonly ConcurrentDictionary<Guid, WebSocket> connectedClients = new();
+        private static CancellationTokenSource? serverCancellation;
+        private static HttpListener? httpListener;
 
-        BluetoothHeartrateModule module;
-        static ConcurrentDictionary<Guid, WebSocket> connectedClients = new();
-        static CancellationTokenSource? serverCancellation;
-        static HttpListener? httpListener;
-
-        public Action<Guid>? OnClientConnect;
-
-        public WebsocketHeartrateServer(BluetoothHeartrateModule module)
+        public WebsocketHeartrateServer(BluetoothHeartrateModule module, AsyncHelper ah)
         {
             this.module = module;
+            this.ah = ah;
         }
 
         internal async Task Start()
@@ -75,8 +74,6 @@ namespace BluetoothHeartrateModule
                         module.LogDebug("Storing connected client");
                         connectedClients.TryAdd(clientId, webSocketContext.WebSocket);
                         module.Log($"Websocket client {clientId} connected.");
-                        module.LogDebug("Invoking OnClientConnect action");
-                        OnClientConnect?.Invoke(clientId);
 
                         _ = HandleWebSocketConnection(clientId, webSocketContext.WebSocket);
                     }
@@ -95,7 +92,7 @@ namespace BluetoothHeartrateModule
             finally
             {
                 StopHttpListener();
-                serverCancellation?.Dispose();
+                ResetServerCancellation();
                 module.Log("Websocket server stopped");
             }
         }
@@ -173,11 +170,10 @@ namespace BluetoothHeartrateModule
         private async void DisconnectClient(Guid clientId)
         {
             module.LogDebug($"Disconnecting client {clientId}");
-            WebSocket? removedClient;
-            connectedClients.TryRemove(clientId, out removedClient);
+            connectedClients.TryRemove(clientId, out WebSocket? removedClient);
             if (removedClient != null)
             {
-                await removedClient.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None);
+                await ah.WaitAsyncVoid(removedClient.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None), AsyncTask.CloseWebsocketConnection);
                 removedClient.Dispose();
             }
             module.Log($"WebSocket client {clientId} disconnected.");
@@ -209,9 +205,8 @@ namespace BluetoothHeartrateModule
                 }
                 catch (WebSocketException ex)
                 {
-                    if (ex.InnerException is HttpListenerException)
+                    if (ex.InnerException is HttpListenerException iex)
                     {
-                        HttpListenerException iex = (HttpListenerException)ex.InnerException;
                         // System.Net.HttpListenerException (1229): An operation was attempted on a nonexistent network connection.
                         if (iex.ErrorCode == 1229)
                         {

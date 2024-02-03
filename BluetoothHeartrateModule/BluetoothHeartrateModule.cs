@@ -8,18 +8,20 @@ namespace BluetoothHeartrateModule
     [ModuleDescription("Displays heartrate data from Bluetooth-based heartrate sensors")]
     public partial class BluetoothHeartrateModule : HeartrateModule<BluetoothHeartrateProvider>
     {
-        private WebsocketHeartrateServer wsServer;
+        private readonly WebsocketHeartrateServer wsServer;
         internal BluetoothLEAdvertisementWatcher? watcher;
+        internal AsyncHelper ah;
 
         public BluetoothHeartrateModule()
         {
-            wsServer = new WebsocketHeartrateServer(this);
+            ah = new AsyncHelper(this);
+            wsServer = new WebsocketHeartrateServer(this, ah);
         }
 
         protected override BluetoothHeartrateProvider CreateProvider()
         {
             LogDebug("Creating provider");
-            var provider = new BluetoothHeartrateProvider(this);
+            var provider = new BluetoothHeartrateProvider(this, ah);
             provider.OnHeartrateUpdate += SendWebcoketHeartrate;
             return provider;
         }
@@ -36,10 +38,11 @@ namespace BluetoothHeartrateModule
 
         protected override void OnLoad()
         {
-            LogDebug("OnLoad");
+            LogDebug("Call base class OnLoad");
             base.OnLoad();
-            CreateTextBox(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty, true);
 
+            LogDebug("Creating settings");
+            CreateTextBox(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty, true);
             CreateToggle(BluetoothHeartrateSetting.WebsocketServerEnabled, @"Websocket Server Enabled", @"Broadcast the heartrate data over a local Websocket server", false);
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerHost, @"Websocket Server Hostname", @"Hostname (IP address) for the Websocket server", "127.0.0.1");
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerPort, @"Websocket Server Port", @"Port for the Websocket server", 36210);
@@ -50,7 +53,9 @@ namespace BluetoothHeartrateModule
 
         protected override void OnPostLoad()
         {
+            LogDebug("Call base class OnPostLoad");
             base.OnPostLoad();
+            LogDebug("Updating settings");
             var wsServerHostSetting = GetSetting(BluetoothHeartrateSetting.WebsocketServerHost);
             if (wsServerHostSetting != null)
             {
@@ -67,6 +72,7 @@ namespace BluetoothHeartrateModule
         {
             LogDebug("Starting module");
             CreateWatcher();
+            LogDebug("Call base class OnModuleStart");
             await base.OnModuleStart();
             if (GetWebocketEnabledSetting())
             {
@@ -78,6 +84,8 @@ namespace BluetoothHeartrateModule
 
         protected override async Task<bool> OnModuleStop()
         {
+            LogDebug("Call base class OnModuleStop");
+            await base.OnModuleStop();
             LogDebug("Stopping module");
             StopWatcher();
             if (GetWebocketEnabledSetting())
@@ -85,7 +93,6 @@ namespace BluetoothHeartrateModule
                 LogDebug("Stopping wsServer");
                 wsServer.Stop();
             }
-            await base.OnModuleStop();
             return true;
         }
 
@@ -160,17 +167,26 @@ namespace BluetoothHeartrateModule
             }
         }
 
-        internal void StartWatcher()
+        internal Task<bool> StartWatcher()
         {
             if (watcher != null)
             {
                 LogDebug($"Starting watcher, current status: {watcher.Status}");
                 if (watcher.Status != BluetoothLEAdvertisementWatcherStatus.Started)
                 {
-                    watcher.Start();
-                    Log("Scanning for devices");
+                    try
+                    {
+                        watcher.Start();
+                        var deviceMacSetting = GetDeviceMacSetting();
+                        Log($"Scanning for {(deviceMacSetting == string.Empty ? "devices" : $"device with MAC {deviceMacSetting}")}");
+                    } catch (Exception ex)
+                    {
+                        Log($"Could not start scanning for devices: {ex.Message}");
+                        return Task.FromResult(false);
+                    }
                 }
             }
+            return Task.FromResult(true);
         }
 
         internal void StopWatcher()
