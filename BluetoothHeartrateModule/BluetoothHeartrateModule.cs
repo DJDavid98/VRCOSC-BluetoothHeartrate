@@ -1,6 +1,6 @@
-﻿using VRCOSC.SDK;
+﻿using VRCOSC.App.SDK.Modules;
+using VRCOSC.App.SDK.Modules.Heartrate;
 using Windows.Devices.Bluetooth.Advertisement;
-using VRCOSC.SDK.Modules.Heartrate;
 
 namespace BluetoothHeartrateModule
 {
@@ -36,13 +36,13 @@ namespace BluetoothHeartrateModule
             base.LogDebug(message);
         }
 
-        protected override void OnLoad()
+        protected override void OnPreLoad()
         {
             LogDebug("Call base class OnLoad");
-            base.OnLoad();
+            base.OnPreLoad();
 
             LogDebug("Creating settings");
-            CreateTextBox(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty, true);
+            CreateTextBox(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty);
             CreateToggle(BluetoothHeartrateSetting.WebsocketServerEnabled, @"Websocket Server Enabled", @"Broadcast the heartrate data over a local Websocket server", false);
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerHost, @"Websocket Server Hostname", @"Hostname (IP address) for the Websocket server", "127.0.0.1");
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerPort, @"Websocket Server Port", @"Port for the Websocket server", 36210);

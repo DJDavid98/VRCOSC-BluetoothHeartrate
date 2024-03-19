@@ -1,10 +1,8 @@
-﻿using System.Reflection.PortableExecutable;
-using VRCOSC.SDK.Modules.Heartrate;
+﻿using VRCOSC.App.SDK.Modules.Heartrate;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
 using Windows.Storage.Streams;
-using Zeroconf;
 
 namespace BluetoothHeartrateModule
 {

@@ -1,12 +1,4 @@
-﻿using SixLabors.ImageSharp;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Windows.ApplicationModel.UserDataTasks;
-using Windows.Foundation;
-using WinRT;
+﻿using Windows.Foundation;
 
 namespace BluetoothHeartrateModule
 {
