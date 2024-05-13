@@ -1,4 +1,6 @@
-﻿using VRCOSC.App.SDK.Modules;
+﻿using Newtonsoft.Json.Linq;
+using System.ComponentModel;
+using VRCOSC.App.SDK.Modules;
 using VRCOSC.App.SDK.Modules.Heartrate;
 using Windows.Devices.Bluetooth.Advertisement;
 
@@ -47,8 +49,7 @@ namespace BluetoothHeartrateModule
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerHost, @"Websocket Server Hostname", @"Hostname (IP address) for the Websocket server", "127.0.0.1");
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerPort, @"Websocket Server Port", @"Port for the Websocket server", 36210);
 
-            // TODO After chatbox support lands in V2
-            // CreateVariable(BluetoothHeartratevariable.DeviceName, @"Device Name", "device");
+            CreateVariable<string>(BluetoothHeartratevariable.DeviceName, @"Device Name");
         }
 
         protected override void OnPostLoad()
@@ -56,15 +57,26 @@ namespace BluetoothHeartrateModule
             LogDebug("Call base class OnPostLoad");
             base.OnPostLoad();
             LogDebug("Updating settings");
+            var wsServerEnabledSetting = GetSetting(BluetoothHeartrateSetting.WebsocketServerEnabled);
+            if (wsServerEnabledSetting != null)
+            {
+                wsServerEnabledSetting.OnSettingChange += WsServerEnabledSettingChangeHandler;
+            }
+            WsServerEnabledSettingChangeHandler();
+        }
+
+        private void WsServerEnabledSettingChangeHandler()
+        {
+            var newValue = GetSettingValue<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled);
             var wsServerHostSetting = GetSetting(BluetoothHeartrateSetting.WebsocketServerHost);
             if (wsServerHostSetting != null)
             {
-                wsServerHostSetting.IsEnabled = () => GetSettingValue<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled);
+                wsServerHostSetting.IsEnabled = newValue;
             }
             var wsServerPortSetting = GetSetting(BluetoothHeartrateSetting.WebsocketServerPort);
             if (wsServerPortSetting != null)
             {
-                wsServerPortSetting.IsEnabled = () => GetSettingValue<bool>(BluetoothHeartrateSetting.WebsocketServerEnabled);
+                wsServerPortSetting.IsEnabled = newValue;
             }
         }
 
@@ -115,8 +127,7 @@ namespace BluetoothHeartrateModule
 
         internal void SetDeviceName(string deviceName)
         {
-            // TODO After chatbox support lands in V2
-            // SetVariableValue(BluetoothHeartratevariable.DeviceName, deviceName);
+            SetVariableValue(BluetoothHeartratevariable.DeviceName, deviceName);
         }
 
         private async void SendWebcoketHeartrate(int heartrate)
