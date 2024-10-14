@@ -12,14 +12,29 @@
 		<Platforms>AnyCPU;x64</Platforms>
 		<Configurations>Debug;Release;Main</Configurations>
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+		<UseWPF>true</UseWPF>
+		<EnableDefaultPageItems>false</EnableDefaultPageItems>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="VolcanicArts.VRCOSC.SDK" Version="2024.713.0" />
+	  <None Remove="UI\BluetoothHeartrateRuntimeView.xaml" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Extended.Wpf.Toolkit" Version="4.6.1" />
+		<PackageReference Include="VolcanicArts.VRCOSC.SDK" Version="2024.1012.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Page Include="UI\BluetoothHeartrateRuntimeView.xaml">
+		  <Generator>MSBuild:Compile</Generator>
+		  <XamlRuntime>Wpf</XamlRuntime>
+		  <SubType>Designer</SubType>
+	  </Page>
 	</ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="xcopy /F /Y &quot;$(TargetDir)$(TargetName).dll&quot; &quot;%25appdata%25\VRCOSC-V2\packages\local\$(TargetName).dll&quot;" />
+		<Exec Command="xcopy /Q /S /R /F /Y /I &quot;$(TargetDir)$(TargetName).dll&quot; &quot;%25appdata%25\VRCOSC-V2\packages\local\&quot;" />
 	</Target>
 
 </Project>

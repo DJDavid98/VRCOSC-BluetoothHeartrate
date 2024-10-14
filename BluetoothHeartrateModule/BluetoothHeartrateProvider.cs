@@ -16,8 +16,14 @@ namespace BluetoothHeartrateModule
         private string? processingAdvertisementId;
         private BluetoothLEDevice? currentDevice;
         private readonly BluetoothHeartrateModule module;
+        private readonly DeviceDataManager deviceDataManager = new();
         private readonly AsyncHelper ah;
         public override bool IsConnected => currentDevice != null && heartRateCharacteristic != null && currentDevice.ConnectionStatus == BluetoothConnectionStatus.Connected;
+
+        public Action<string[]>? OnDeviceListUpdate {
+            get { return deviceDataManager.OnDeviceListUpdate; }
+            internal set { deviceDataManager.OnDeviceListUpdate = value; }
+        }
 
         public BluetoothHeartrateProvider(BluetoothHeartrateModule module, AsyncHelper ah)
         {

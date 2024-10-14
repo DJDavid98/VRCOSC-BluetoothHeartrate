@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using BluetoothHeartrateModule.UI;
+using Newtonsoft.Json.Linq;
 using System.ComponentModel;
 using VRCOSC.App.SDK.Modules;
 using VRCOSC.App.SDK.Modules.Heartrate;
@@ -13,6 +14,7 @@ namespace BluetoothHeartrateModule
         private readonly WebsocketHeartrateServer wsServer;
         internal BluetoothLEAdvertisementWatcher? watcher;
         internal AsyncHelper ah;
+        internal Action<string[]>? OnDeviceListUpdate;
 
         public BluetoothHeartrateModule()
         {
@@ -25,6 +27,7 @@ namespace BluetoothHeartrateModule
             LogDebug("Creating provider");
             var provider = new BluetoothHeartrateProvider(this, ah);
             provider.OnHeartrateUpdate += SendWebcoketHeartrate;
+            provider.OnDeviceListUpdate += OnDeviceListUpdate;
             return provider;
         }
 
@@ -50,6 +53,8 @@ namespace BluetoothHeartrateModule
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerPort, @"Websocket Server Port", @"Port for the Websocket server", 36210);
 
             CreateVariable<string>(BluetoothHeartratevariable.DeviceName, @"Device Name");
+
+            SetRuntimeView(typeof(BluetoothHeartrateRuntimeView));
         }
 
         protected override void OnPostLoad()
