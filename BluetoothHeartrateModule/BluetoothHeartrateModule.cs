@@ -1,8 +1,10 @@
 ﻿using BluetoothHeartrateModule.UI;
 using Newtonsoft.Json.Linq;
 using System.ComponentModel;
+using System.Runtime.Intrinsics.Arm;
 using VRCOSC.App.SDK.Modules;
 using VRCOSC.App.SDK.Modules.Heartrate;
+using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 
 namespace BluetoothHeartrateModule
@@ -14,20 +16,23 @@ namespace BluetoothHeartrateModule
         private readonly WebsocketHeartrateServer wsServer;
         internal BluetoothLEAdvertisementWatcher? watcher;
         internal AsyncHelper ah;
-        internal Action<string[]>? OnDeviceListUpdate;
+        internal DeviceDataManager deviceDataManager;
+
+        [ModulePersistent("selectedDeviceMac")]
+        private string selectedDeviceMac { get; set; } = string.Empty;
 
         public BluetoothHeartrateModule()
         {
             ah = new AsyncHelper(this);
-            wsServer = new WebsocketHeartrateServer(this, ah);
+            wsServer = new WebsocketHeartrateServer(this);
+            deviceDataManager = new(this);
         }
 
         protected override BluetoothHeartrateProvider CreateProvider()
         {
             LogDebug("Creating provider");
-            var provider = new BluetoothHeartrateProvider(this, ah);
+            var provider = new BluetoothHeartrateProvider(this);
             provider.OnHeartrateUpdate += SendWebcoketHeartrate;
-            provider.OnDeviceListUpdate += OnDeviceListUpdate;
             return provider;
         }
 
@@ -47,7 +52,6 @@ namespace BluetoothHeartrateModule
             base.OnPreLoad();
 
             LogDebug("Creating settings");
-            CreateTextBox(BluetoothHeartrateSetting.DeviceMac, "Device MAC address", "MAC address of the Bluetooth heartrate monitor", string.Empty);
             CreateToggle(BluetoothHeartrateSetting.WebsocketServerEnabled, @"Websocket Server Enabled", @"Broadcast the heartrate data over a local Websocket server", false);
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerHost, @"Websocket Server Hostname", @"Hostname (IP address) for the Websocket server", "127.0.0.1");
             CreateTextBox(BluetoothHeartrateSetting.WebsocketServerPort, @"Websocket Server Port", @"Port for the Websocket server", 36210);
@@ -115,7 +119,7 @@ namespace BluetoothHeartrateModule
 
         internal string GetDeviceMacSetting()
         {
-            return GetSettingValue<string>(BluetoothHeartrateSetting.DeviceMac) ?? "";
+            return selectedDeviceMac;
         }
         internal bool GetWebocketEnabledSetting()
         {
@@ -130,10 +134,58 @@ namespace BluetoothHeartrateModule
             return GetSettingValue<int>(BluetoothHeartrateSetting.WebsocketServerPort);
         }
 
+        internal void SetDeviceMacSetting(string deviceMac)
+        {
+            if (selectedDeviceMac != deviceMac)
+            {
+                selectedDeviceMac = deviceMac;
+                Log($"Selected device with MAC {deviceMac}");
+            }
+        }
+
+        internal void ClearDeviceMacSetting()
+        {
+            ResetDeviceData();
+            selectedDeviceMac = string.Empty;
+            deviceDataManager.ConnectedDeviceMac = string.Empty;
+            deviceDataManager.Refresh();
+            StartWatcher();
+        }
         internal void SetDeviceName(string deviceName)
         {
             SetVariableValue(BluetoothHeartratevariable.DeviceName, deviceName);
         }
+
+        public void ResetCurrentDevice()
+        {
+            if (deviceDataManager.currentDevice != null)
+            {
+                LogDebug("Resetting currentDevice");
+                try
+                {
+                    LogDebug("Disposing of currentDevice");
+                    deviceDataManager.currentDevice.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Ignore if object is already disposed
+                    LogDebug("currentDevice already disposed");
+                }
+                deviceDataManager.currentDevice = null;
+                LogDebug("currentDevice has been reset");
+            }
+        }
+
+        public void ResetDeviceData()
+        {
+            LogDebug("Resetting device data");
+            deviceDataManager.ResetHeartRateService();
+            deviceDataManager.ResetHeartRateCharacteristic();
+            ResetCurrentDevice();
+            deviceDataManager.ResetMissingCharacterisicsDevices();
+            LogDebug("Device data has been reset");
+        }
+
 
         private async void SendWebcoketHeartrate(int heartrate)
         {
@@ -159,47 +211,32 @@ namespace BluetoothHeartrateModule
 
         private void Watcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args)
         {
-            LogDebug($"Watcher stopped, error: {args.Error}");
-            string scanStatus;
-            bool invokeDisconnect = true;
-            switch (args.Error)
-            {
-                case Windows.Devices.Bluetooth.BluetoothError.RadioNotAvailable:
-                    scanStatus = "Bluetooth adapter/module is disconnected";
-                    break;
-                case Windows.Devices.Bluetooth.BluetoothError.Success:
-                    scanStatus = "device found";
-                    invokeDisconnect = false;
-                    break;
-                default:
-                    scanStatus = args.Error.ToString();
-                    break;
-            }
-            Log($"Stopped scanning for devices ({scanStatus})");
-            if (invokeDisconnect)
+            string scanStatus = args.Error.ToString();
+            LogDebug($"Watcher stopped, error: {scanStatus}");
+            Log($"Stopped scanning for devices");
+            if (deviceDataManager.currentDevice == null)
             {
                 LogDebug("Invoking OnDisconnected action");
-                HeartrateProvider?.OnDisconnected?.Invoke();
+                deviceDataManager.OnDisconnected?.Invoke();
             }
+            deviceDataManager.Refresh();
         }
 
         internal Task<bool> StartWatcher()
         {
-            if (watcher != null)
+            var existingWatcher = CreateWatcher();
+            LogDebug($"Starting watcher, current status: {existingWatcher.Status}");
+            if (existingWatcher.Status != BluetoothLEAdvertisementWatcherStatus.Started)
             {
-                LogDebug($"Starting watcher, current status: {watcher.Status}");
-                if (watcher.Status != BluetoothLEAdvertisementWatcherStatus.Started)
+                try
                 {
-                    try
-                    {
-                        watcher.Start();
-                        var deviceMacSetting = GetDeviceMacSetting();
-                        Log($"Scanning for {(deviceMacSetting == string.Empty ? "devices" : $"device with MAC {deviceMacSetting}")}");
-                    } catch (Exception ex)
-                    {
-                        Log($"Could not start scanning for devices: {ex.Message}");
-                        return Task.FromResult(false);
-                    }
+                    existingWatcher.Start();
+                    var deviceMacSetting = GetDeviceMacSetting();
+                    Log($"Scanning for {(deviceMacSetting == string.Empty ? "devices" : $"device with MAC {deviceMacSetting}")}");
+                } catch (Exception ex)
+                {
+                    Log($"Could not start scanning for devices: {ex.Message}");
+                    return Task.FromResult(false);
                 }
             }
             return Task.FromResult(true);
@@ -213,7 +250,6 @@ namespace BluetoothHeartrateModule
 
         internal enum BluetoothHeartrateSetting
         {
-            DeviceMac,
             WebsocketServerEnabled,
             WebsocketServerHost,
             WebsocketServerPort

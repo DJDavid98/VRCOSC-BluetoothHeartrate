@@ -12,10 +12,10 @@ namespace BluetoothHeartrateModule
         private static CancellationTokenSource? serverCancellation;
         private static HttpListener? httpListener;
 
-        public WebsocketHeartrateServer(BluetoothHeartrateModule module, AsyncHelper ah)
+        public WebsocketHeartrateServer(BluetoothHeartrateModule module)
         {
             this.module = module;
-            this.ah = ah;
+            this.ah = module.ah;
         }
 
         internal async Task Start()
