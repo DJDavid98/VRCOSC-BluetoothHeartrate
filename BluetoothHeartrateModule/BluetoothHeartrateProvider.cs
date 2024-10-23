@@ -38,8 +38,16 @@ namespace BluetoothHeartrateModule
                 return false;
             }
 
-            module.LogDebug("Registering watcher received handler");
-            module.watcher.Received += Watcher_Received;
+            return await StartWatcher();
+        }
+
+        private async Task<bool> StartWatcher(bool invokeDisconnect = true)
+        {
+            if (module.watcher != null)
+            {
+                module.LogDebug("Registering watcher received handler");
+                module.watcher.Received += Watcher_Received;
+            }
             module.LogDebug("Registering characteristic change handler");
             ddm.OnHeartRateCharacteristicValueChange += HandleHeartRateCharacteristicValueChange;
             ddm.OnConnected += HandleConneted;
@@ -48,7 +56,7 @@ namespace BluetoothHeartrateModule
             watcherStopper = new();
             module.LogDebug("Generated new watcherStopper");
             var startResult = await module.StartWatcher();
-            if (!startResult)
+            if (invokeDisconnect && !startResult)
             {
                 OnDisconnected?.Invoke();
             }
@@ -245,6 +253,8 @@ namespace BluetoothHeartrateModule
         private void HandleDisconneted()
         {
             OnDisconnected?.Invoke();
+            Reset();
+            _ = StartWatcher();
         }
 
         private void HandleHeartRateCharacteristicValueChange(byte updateData)
