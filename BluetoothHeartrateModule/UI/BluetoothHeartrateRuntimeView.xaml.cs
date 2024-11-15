@@ -56,7 +56,7 @@ namespace BluetoothHeartrateModule.UI
                 }
                 if (!selectedItemFound) {
                     var missingDevice = new DeviceData(selectedDeviceMac, module.deviceDataManager, true);
-                    missingDevice.Name = selectedDeviceMac == string.Empty ? (string)DeviceSelection.Watermark : "Scanning for devices…";
+                    missingDevice.Name = selectedDeviceMac == string.Empty ? (string)DeviceSelection.Watermark : "Scanning for device…";
                     Devices.Add(missingDevice);
                     DeviceSelection.SelectedItem = missingDevice;
                 }
