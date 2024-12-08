@@ -19,36 +19,22 @@ Either of which must be capable of handling at least Bluetooth version 4.0 (whic
 
 ### Setup steps
 
-1. Find the latest release on the [Releases] page
-2. Download the attached DLL
-3. Place the DLL in `%appdata%\VRCOSC\assemblies`
-4. Start VRCOSC
-5. Scroll to the bottom of the module list
-6. Enable "Bluetooth Heartrate" (by clicking on the blank square in front of it)
-7. Turn on your heartrate monitor (if it has no separate power button, then simply put in on)
-8. Switch to the "Run" screen (play icon) and press the green play button to start the modules
-9. Wait for the module to discover your device. You should see log messages like the one below:
+1. Start VRCOSC and go to the Download page (1st icon from the top)
+2. Find "Bluetooth Heartrate" in the list
+3. Click the dropdown that says "Not Installed", select the latest available version (starts with "v2")
+4. Go to the Modules page (2nd icon from the top)
+5. Enable "Bluetooth Heartrate" (by clicking on the blank square in front of it)
+5. Turn on your heartrate monitor (if it has no separate power button, then simply put in on)
+6. Switch to the Run page (4th "play" icon) and press the green play button to start the modules
+7. Wait for the module to discover your device. You should see a dropdown appear in the runtime view showing your connected devices
+10. Once you see your device in the list, click its name
+11. The module will automatically start connecting
 
-    > \[Bluetooth Heartrate]: Discovered device: Polar H10 (MAC: XX:XX:XX:XX:XX:XX)
+If everything went well, you should see the following log messages:
 
-10. Once you see your device, click the blue button in the top right of the log window to open the log in Notepad
-11. Copy the MAC address of the device from the log file (only the `XX:XX:XX:XX:XX:XX` part)
-12. Return to VRCOSC and switch back to the module list
-13. Find the "Bluetooth Heartrate" module agan
-14. Click the cogwheel at the end of the module's line to access its settings
-15. Paste the MAC address into the "Device MAC address" setting input
-16. Switch back to the "Run" screen and check the log output
-
-If everything went well, you should see the following messages:
-
-> \[Bluetooth Heartrate]: Starting<br>
-> \[Bluetooth Heartrate]: Watching for devices<br>
-> \[Bluetooth Heartrate]: Started<br>
-> \[Bluetooth Heartrate]: Found device for MAC XX:XX:XX:XX:XX:XX<br>
-> \[Bluetooth Heartrate]: Found heartrate service<br>
-> \[Bluetooth Heartrate]: Found heartrate measurement characteristic<br>
-> \[Bluetooth Heartrate]: Requesting characteristic notifications<br>
-> \[Bluetooth Heartrate]: Connection successful
+> \[Bluetooth Heartrate]: Selected device with MAC AB:CD:EF:01:23:45<br>
+> \[Bluetooth Heartrate]: Connection successful<br>
+> \[Bluetooth Heartrate]: Stopped scanning for devices
 
 [Releases]: https://github.com/DJDavid98/VRCOSC-BluetoothHeartrate/releases
 
@@ -66,8 +52,11 @@ As for the port, you can choose any number that is not already in use on the sys
 
 ### Known issues
 
-Sometimes Windows' Bluetooth API starts being weird and you will see a "No heartrate characteristic found" in the logs.
+Sometimes Windows' Bluetooth API starts being weird, and you will see a "No heartrate characteristic found" in the logs.
 This can happen either temporarily (and the module might recover on its own after a few seconds) or it can be a persistent issue.
+
+If the device cannot be connected to, the device name shown on the dropdown will blink blue/yellow.
+When this happens, try the steps below.
 
 ### Troubleshooting
 
