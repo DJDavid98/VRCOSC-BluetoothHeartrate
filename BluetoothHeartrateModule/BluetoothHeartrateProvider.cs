@@ -1,28 +1,17 @@
-﻿using System.Runtime.Intrinsics.Arm;
-using VRCOSC.App.SDK.Modules.Heartrate;
+﻿using VRCOSC.App.SDK.Modules.Heartrate;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
-using Windows.Storage.Streams;
 
 namespace BluetoothHeartrateModule
 {
-    public class BluetoothHeartrateProvider : HeartrateProvider
+    public class BluetoothHeartrateProvider(BluetoothHeartrateModule module) : HeartrateProvider
     {
-        private CancellationTokenSource watcherStopper = new();
-        private readonly BluetoothHeartrateModule module;
-        private readonly DeviceDataManager ddm;
-        private readonly AsyncHelper ah;
-        private readonly DeviceNameResolver dnr;
-        public override bool IsConnected => ddm.currentDevice != null && ddm.heartRateCharacteristic != null && ddm.currentDevice.ConnectionStatus == BluetoothConnectionStatus.Connected;
-
-        public BluetoothHeartrateProvider(BluetoothHeartrateModule module)
-        {
-            this.module = module;
-            this.ah = module.ah;
-            this.ddm = module.deviceDataManager;
-            dnr = new DeviceNameResolver(module);
-        }
+        private CancellationTokenSource _watcherStopper = new();
+        private readonly DeviceDataManager _ddm = module.DeviceDataManager;
+        private readonly AsyncHelper _ah = module.Ah;
+        public override bool IsConnected => _ddm.CurrentDevice != null && _ddm.HeartRateCharacteristic != null && _ddm.CurrentDevice.ConnectionStatus == BluetoothConnectionStatus.Connected;
+        private int _scanAttempts;
 
         public override async Task<bool> Initialise()
         {
@@ -32,28 +21,29 @@ namespace BluetoothHeartrateModule
                 module.LogDebug("Device MAC setting is not set, module will log discovered devices");
             }
 
-            if (module.watcher == null)
+            if (module.Watcher == null)
             {
                 module.LogDebug("Watcher is not defined");
                 return false;
             }
+            _scanAttempts = 0;
 
             return await StartWatcher();
         }
 
         private async Task<bool> StartWatcher(bool invokeDisconnect = true)
         {
-            if (module.watcher != null)
+            if (module.Watcher != null)
             {
                 module.LogDebug("Registering watcher received handler");
-                module.watcher.Received += Watcher_Received;
+                module.Watcher.Received += Watcher_Received;
             }
             module.LogDebug("Registering characteristic change handler");
-            ddm.OnHeartRateCharacteristicValueChange += HandleHeartRateCharacteristicValueChange;
-            ddm.OnConnected += HandleConneted;
-            ddm.OnDisconnected += HandleDisconneted;
+            _ddm.OnHeartRateCharacteristicValueChange += HandleHeartRateCharacteristicValueChange;
+            _ddm.OnConnected += HandleConnected;
+            _ddm.OnDisconnected += HandleDisconnected;
             module.LogDebug("Starting watcher");
-            watcherStopper = new();
+            _watcherStopper = new();
             module.LogDebug("Generated new watcherStopper");
             var startResult = await module.StartWatcher();
             if (invokeDisconnect && !startResult)
@@ -66,6 +56,7 @@ namespace BluetoothHeartrateModule
         public override Task Teardown()
         {
             Reset();
+            _scanAttempts = 0;
 
             return Task.CompletedTask;
         }
@@ -74,26 +65,27 @@ namespace BluetoothHeartrateModule
         {
             module.LogDebug("Resetting provider");
             module.LogDebug("Cancelling watcherStopper");
-            watcherStopper.Cancel();
+            _watcherStopper.Cancel();
             module.LogDebug("Clearing device names");
-            ddm.ClearDevices();
-            ddm.ResetMissingCharacterisicsDevices();
+            _ddm.ClearDevices();
+            _ddm.ResetMissingCharacterisicsDevices();
             module.ResetDeviceData();
             module.LogDebug("Clearing processing device MAC");
-            ddm.ProcessingDeviceMac = string.Empty;
+            _ddm.ProcessingDeviceMac = string.Empty;
             module.LogDebug("Clearing connected device MAC");
-            ddm.ConnectedDeviceMac = string.Empty;
-            ddm.Refresh();
-            ddm.OnHeartRateCharacteristicValueChange -= HandleHeartRateCharacteristicValueChange;
-            ddm.OnConnected -= HandleConneted;
-            ddm.OnDisconnected -= HandleDisconneted;
+            _ddm.ConnectedDeviceMac = string.Empty;
+            _ddm.Refresh();
+            _ddm.OnHeartRateCharacteristicValueChange -= HandleHeartRateCharacteristicValueChange;
+            _ddm.OnConnected -= HandleConnected;
+            _ddm.OnDisconnected -= HandleDisconnected;
         }
 
 
             private async void Watcher_Received(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementReceivedEventArgs args)
         {
+            _ddm.UpdateBluetoothAvailability(true);
             var advertisementMac = Converter.FormatAsMac(args.BluetoothAddress);
-            if (ddm.ProcessingDeviceMac == advertisementMac)
+            if (_ddm.ProcessingDeviceMac == advertisementMac)
             {
                 // Skip advertisements for the device which is already being processed
                 return;
@@ -104,18 +96,13 @@ namespace BluetoothHeartrateModule
             var deviceMacSetting = module.GetDeviceMacSetting();
             var isDeviceConfigured = deviceMacSetting != string.Empty;
             var isConfiguredDevice = advertisementMac == deviceMacSetting;
-            if (isDeviceConfigured && !isConfiguredDevice)
-            {
-                // Not the droid we're looking for
-                return;
-            }
 
             try
             {
-                var deviceData = ddm.Get(advertisementMac);
+                var deviceData = _ddm.Get(advertisementMac);
                 if (deviceData == null)
                 {
-                    var newDeviceData = await ddm.Add(args.BluetoothAddress, args.Advertisement, watcherStopper);
+                    var newDeviceData = await _ddm.Add(args.BluetoothAddress, args.Advertisement, _watcherStopper);
                     if (newDeviceData != null)
                     {
                         deviceData = newDeviceData;
@@ -127,41 +114,42 @@ namespace BluetoothHeartrateModule
                     deviceData.LastAdvertisementDateTime = DateTime.Now;
                 }
 
-                if (!isDeviceConfigured)
+                if (!isDeviceConfigured || !isConfiguredDevice)
                 {
                     // Waiting for device mac selection before progressing further
                     return;
                 }
 
-                if (ddm.heartRateCharacteristic != null)
+                if (_ddm.HeartRateCharacteristic != null)
                 {
                     // Characteristic already found
                     return;
                 }
 
-                if (ddm.ProcessingDeviceMac == advertisementMac)
+                if (_ddm.ProcessingDeviceMac == advertisementMac)
                 {
                     // Skip advertisements for the device which is already being processed
                     return;
                 }
 
-                ddm.ProcessingDeviceMac = advertisementMac;
-                ddm.Refresh();
+                _ddm.ProcessingDeviceMac = advertisementMac;
+                _ddm.UpdateConnestionStatus(DeviceDataManager.PossibleConnectionStates.Connecting);
+                _ddm.Refresh();
                 module.LogDebug($"{logPrefix} Begin processing advertisement data");
                 IEnumerable<GattDeviceService>? cleanupServices = null;
                 try
                 {
-                    if (ddm.currentDevice == null)
+                    if (_ddm.CurrentDevice == null)
                     {
                         module.LogDebug($"{logPrefix} Setting currrent device");
-                        var newCurrentDevice = await ah.WaitAsync(BluetoothLEDevice.FromBluetoothAddressAsync(args.BluetoothAddress), AsyncTask.SetCurrentDevice, watcherStopper);
+                        var newCurrentDevice = await _ah.WaitAsync(BluetoothLEDevice.FromBluetoothAddressAsync(args.BluetoothAddress), AsyncTask.SetCurrentDevice, _watcherStopper);
                         if (newCurrentDevice != null)
                         {
-                            ddm.currentDevice = newCurrentDevice;
-                            var currentDeviceName = ddm.Get(advertisementMac)?.Name ?? string.Empty;
+                            _ddm.CurrentDevice = newCurrentDevice;
+                            var currentDeviceName = _ddm.Get(advertisementMac)?.Name ?? string.Empty;
                             module.LogDebug($"{logPrefix} Found device named {currentDeviceName} for MAC {advertisementMac}");
                             module.SetDeviceName(currentDeviceName);
-                            ddm.RegiterConnectionStatusChangeHandler(logPrefix);
+                            _ddm.RegiterConnectionStatusChangeHandler(logPrefix);
                         }
                         else
                         {
@@ -174,12 +162,12 @@ namespace BluetoothHeartrateModule
                         module.LogDebug($"{logPrefix} Current device already set");
                     }
 
-                    var missingCharacteristicUnknown = !ddm.missingCharacteristicDevices.Contains(deviceMacSetting);
-                    cleanupServices = await FindHeartrateCharacteristic(ddm.currentDevice, advertisementMac, logPrefix, deviceMacSetting, missingCharacteristicUnknown);
+                    var missingCharacteristicUnknown = !_ddm.MissingCharacteristicDevices.Contains(deviceMacSetting);
+                    cleanupServices = await FindHeartrateCharacteristic(_ddm.CurrentDevice, advertisementMac, logPrefix, deviceMacSetting, missingCharacteristicUnknown);
 
-                    if (ddm.heartRateCharacteristic == null && missingCharacteristicUnknown)
+                    if (_ddm.HeartRateCharacteristic == null && missingCharacteristicUnknown)
                     {
-                        ddm.missingCharacteristicDevices.Add(deviceMacSetting);
+                        _ddm.MissingCharacteristicDevices.Add(deviceMacSetting);
                     }
                 }
                 catch (Exception ex)
@@ -194,8 +182,12 @@ namespace BluetoothHeartrateModule
                         foreach (var service in cleanupServices)
                             service.Dispose();
                     }
-                    ddm.ProcessingDeviceMac = string.Empty;
-                    ddm.Refresh();
+                    if (_ddm.ConnectedDeviceMac == string.Empty)
+                    {
+                        _ddm.UpdateConnestionStatus(DeviceDataManager.PossibleConnectionStates.Scanning);
+                    }
+                    _ddm.ProcessingDeviceMac = string.Empty;
+                    _ddm.Refresh();
                     module.LogDebug($"{logPrefix} Stopped processing advertisement");
                 }
 
@@ -212,8 +204,10 @@ namespace BluetoothHeartrateModule
             IEnumerable<GattDeviceService>? cleanupServices = null;
             module.LogDebug($"{logPrefix} Finding HeratRate service");
             GattDeviceServicesResult? servicesResult = null;
-            servicesResult = await ah.WaitAsync(currentDevice.GetGattServicesForUuidAsync(GattServiceUuids.HeartRate, BluetoothCacheMode.Uncached), AsyncTask.GetHeartRateService, watcherStopper);
-            if (servicesResult != null && servicesResult.Services.Count > 0)
+            servicesResult = await _ah.WaitAsync(currentDevice.GetGattServicesForUuidAsync(GattServiceUuids.HeartRate, BluetoothCacheMode.Uncached), AsyncTask.GetHeartRateService, _watcherStopper);
+            var hasHeartrateService = servicesResult != null && servicesResult.Services.Count > 0;
+            _ddm.SetHasHeartrateService(advertisementMac, hasHeartrateService);
+            if (hasHeartrateService)
             {
                 cleanupServices = servicesResult.Services;
                 var firstService = cleanupServices.First();
@@ -221,40 +215,50 @@ namespace BluetoothHeartrateModule
                 {
                     module.LogDebug($"{logPrefix} Found heartrate service");
                 }
-                GattCharacteristicsResult? characteristicsResult = await ah.WaitAsync(firstService.GetCharacteristicsForUuidAsync(GattCharacteristicUuids.HeartRateMeasurement, BluetoothCacheMode.Uncached), AsyncTask.GetHeartRateCharacteristic, watcherStopper);
+                GattCharacteristicsResult? characteristicsResult = await _ah.WaitAsync(firstService.GetCharacteristicsForUuidAsync(GattCharacteristicUuids.HeartRateMeasurement, BluetoothCacheMode.Uncached), AsyncTask.GetHeartRateCharacteristic, _watcherStopper);
                 module.LogDebug($"{logPrefix} Finding HeartRateMeasurement characteristic");
-                if (characteristicsResult != null && characteristicsResult.Characteristics.Count > 0)
+                var hasHeartrateCharacteristic = characteristicsResult != null && characteristicsResult.Characteristics.Count > 0;
+                _ddm.SetHasHeartrateCharacteristic(advertisementMac, hasHeartrateCharacteristic);
+                if (hasHeartrateCharacteristic)
                 {
-                    ddm.ConnectedDeviceMac = advertisementMac;
-                    ddm.Refresh();
-                    await ddm.HandleHeartRateCharacteristicFound(logPrefix, firstService, characteristicsResult.Characteristics[0], watcherStopper);
-                    if (ddm.heartRateService != null)
+                    _ddm.ConnectedDeviceMac = advertisementMac;
+                    _ddm.Refresh();
+                    await _ddm.HandleHeartRateCharacteristicFound(logPrefix, firstService, characteristicsResult.Characteristics[0], _watcherStopper);
+                    if (_ddm.HeartRateService != null)
                     {
-                        cleanupServices = servicesResult.Services.Where(s => s != ddm.heartRateService);
+                        cleanupServices = servicesResult.Services.Where(s => s != _ddm.HeartRateService);
                     }
                 }
                 else if (missingCharacteristicUnknown)
                 {
-                    module.Log($"No heartrate characteristics found");
+                    module.LogDebug($"{logPrefix} No heartrate characteristics found");
                 }
             }
             else if (missingCharacteristicUnknown)
             {
-                module.Log($"No heartrate service found");
+                module.LogDebug($"{logPrefix} No heartrate service found");
             }
 
             return cleanupServices;
         }
 
-        private void HandleConneted()
+        private void HandleConnected()
         {
+            _scanAttempts = 0;
+            _ddm.UpdateConnestionStatus(DeviceDataManager.PossibleConnectionStates.Connected);
             OnConnected?.Invoke();
         }
-        private void HandleDisconneted()
+        private void HandleDisconnected()
         {
             OnDisconnected?.Invoke();
             Reset();
-            _ = StartWatcher();
+            if (_scanAttempts < 7)
+            {
+                _scanAttempts++;
+            }
+            double waitTimeMilliseconds = Math.Pow(2, _scanAttempts) * 100;
+            module.LogDebug($"Waiting for {waitTimeMilliseconds / 1e3d}s before scanning again…");
+            Task.Delay(TimeSpan.FromMilliseconds(waitTimeMilliseconds)).ContinueWith(_ => StartWatcher());
         }
 
         private void HandleHeartRateCharacteristicValueChange(byte updateData)

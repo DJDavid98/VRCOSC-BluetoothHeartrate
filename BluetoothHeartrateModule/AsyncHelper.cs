@@ -4,10 +4,10 @@ namespace BluetoothHeartrateModule
 {
     public class AsyncHelper
     {
-        private readonly BluetoothHeartrateModule module;
+        private readonly BluetoothHeartrateModule _module;
         public AsyncHelper(BluetoothHeartrateModule module)
         {
-            this.module = module;
+            this._module = module;
         }
 
         public Task<T?> WaitAsync<T>(IAsyncOperation<T> asyncOperation, AsyncTask taskType, CancellationTokenSource cancelToken)
@@ -76,7 +76,7 @@ namespace BluetoothHeartrateModule
 
         internal void LogTimeout(AsyncTask taskType, TimeSpan timeout)
         {
-            module.LogDebug($"Task {taskType} timed out after {timeout.TotalSeconds}s");
+            _module.LogDebug($"Task {taskType} timed out after {timeout.TotalSeconds}s");
         }
 
         internal static TimeSpan GetTaskTimeout(AsyncTask taskType)

@@ -4,29 +4,54 @@
     xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
     x:Class="BluetoothHeartrateModule.UI.BluetoothHeartrateRuntimeView"
 >
-    <StackPanel Orientation="Horizontal">
-        <xctk:WatermarkComboBox
-            x:Name="DeviceSelection"
-            Margin="5,5,5,5"
-            Grid.Row="2"
-            ItemsSource="{Binding Devices}"
-            FontSize="16"
-            LostMouseCapture="DeviceSelection_LostMouseCapture"
-            SelectionChanged="DeviceSelection_OnSelectionChanged"
-            IsReadOnly="{Binding DeviceReadOnly}"
-            IsEditable="{Binding DeviceEditable}"
-            HorizontalAlignment="Left" 
-        >
-            <xctk:WatermarkComboBox.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Orientation="Horizontal">
-                        <Rectangle Fill="{Binding StatusColor}" Width="16" Height="16" Margin="0,2,5,2" RadiusX="8" RadiusY="8" Visibility="{Binding StatusDisplay}" />
+    <StackPanel Orientation="Vertical">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <Image x:Name="BluetoothIcon" Width="32" Height="32" HorizontalAlignment="Left"/>
+            <TextBlock
+                x:Name="BluetoothAvailabilityTextBlock"
+                Foreground="White"
+                FontSize="16"
+                Margin="5,5,5,5"
+            />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <Rectangle x:Name="ConnectionStatusCircle" Width="16" Height="16" Margin="5,2,0,2" RadiusX="8" RadiusY="8" />
 
-                        <TextBlock Text="{Binding Label}" Foreground="{Binding StatusColor}" />
-                    </StackPanel>
-                </DataTemplate>
-            </xctk:WatermarkComboBox.ItemTemplate>
-        </xctk:WatermarkComboBox>
-        <Button Margin="0,5,5,5" Padding="5,0,5,0" Click="Reset_Click" HorizontalAlignment="Right">Reset</Button>
+            <TextBlock
+                x:Name="ConnectionStatusTextBlock"
+                FontSize="16"
+                Margin="5,5,5,5"
+            />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <xctk:WatermarkComboBox
+                x:Name="DeviceSelection"
+                Margin="5,5,5,5"
+                Grid.Row="2"
+                ItemsSource="{Binding Devices}"
+                FontSize="16"
+                LostMouseCapture="DeviceSelection_LostMouseCapture"
+                SelectionChanged="DeviceSelection_OnSelectionChanged"
+                IsReadOnly="{Binding DeviceReadOnly}"
+                IsEditable="{Binding DeviceEditable}"
+                IsEnabled="{Binding DeviceEditable}"
+                HorizontalAlignment="Left" 
+            >
+                <xctk:WatermarkComboBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Vertical">
+                            <StackPanel Orientation="Horizontal">
+                                <Rectangle Fill="{Binding StatusColor}" Width="16" Height="16" Margin="0,2,5,2" RadiusX="8" RadiusY="8" Visibility="{Binding StatusDisplay}" />
+
+                                <TextBlock Text="{Binding Label}" Foreground="{Binding StatusColor}" />
+                            </StackPanel>
+                            <TextBlock Text="No heartrate service found"  FontSize="14" Foreground="DarkRed"  Margin="0,5,0,0" Visibility="{Binding NoHeartrateServiceDisplay}" HorizontalAlignment="Left" />
+                            <TextBlock Text="No heartrate characteristic found"  FontSize="14" Foreground="DarkRed" Margin="0,5,0,0" Visibility="{Binding NoHeartrateCharacteristicDisplay}" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </DataTemplate>
+                </xctk:WatermarkComboBox.ItemTemplate>
+            </xctk:WatermarkComboBox>
+            <Button Margin="0,5,5,5" Padding="5,0,5,0" Click="Reset_Click" HorizontalAlignment="Right">Reset</Button>
+        </StackPanel>
     </StackPanel>
 </UserControl>

@@ -4,9 +4,9 @@
 		<TargetFramework>net8.0-windows10.0.22621.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		<Version>2.0.14.0</Version>
-		<AssemblyVersion>2.0.14.0</AssemblyVersion>
-		<FileVersion>2.0.14.0</FileVersion>
+		<Version>2.0.15.0</Version>
+		<AssemblyVersion>2.0.15.0</AssemblyVersion>
+		<FileVersion>2.0.15.0</FileVersion>
 		<Authors>DJDavid98</Authors>
 		<Product>Bluetooth Heartrate</Product>
 		<ApplicationIcon>logo\logo.ico</ApplicationIcon>
@@ -15,6 +15,16 @@
 		<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
 		<UseWPF>true</UseWPF>
 	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Remove="img\bt-off.png" />
+	  <None Remove="img\bt-on.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Resource Include="img\bt-off.png" />
+	  <Resource Include="img\bt-on.png" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<PackageReference Include="Extended.Wpf.Toolkit" Version="4.6.1" />
@@ -26,6 +36,7 @@
 			<Generator>MSBuild:Compile</Generator>
 			<XamlRuntime>Wpf</XamlRuntime>
 			<SubType>Designer</SubType>
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</Page>
 	</ItemGroup>
 
@@ -33,6 +44,10 @@
 		<Compile Update="UI\BluetoothHeartrateRuntimeView.xaml.cs">
 			<DependentUpon>BluetoothHeartrateRuntimeView.xaml</DependentUpon>
 		</Compile>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Properties\" />
 	</ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">

@@ -1,10 +1,7 @@
 ﻿using BluetoothHeartrateModule.UI;
-using Newtonsoft.Json.Linq;
-using System.ComponentModel;
-using System.Runtime.Intrinsics.Arm;
+using System.Runtime.InteropServices;
 using VRCOSC.App.SDK.Modules;
 using VRCOSC.App.SDK.Modules.Heartrate;
-using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 
 namespace BluetoothHeartrateModule
@@ -13,19 +10,19 @@ namespace BluetoothHeartrateModule
     [ModuleDescription("Displays heartrate data from Bluetooth-based heartrate sensors")]
     public partial class BluetoothHeartrateModule : HeartrateModule<BluetoothHeartrateProvider>
     {
-        private readonly WebsocketHeartrateServer wsServer;
-        internal BluetoothLEAdvertisementWatcher? watcher;
-        internal AsyncHelper ah;
-        internal DeviceDataManager deviceDataManager;
+        private readonly WebsocketHeartrateServer _wsServer;
+        internal BluetoothLEAdvertisementWatcher? Watcher;
+        internal AsyncHelper Ah;
+        internal DeviceDataManager DeviceDataManager;
 
         [ModulePersistent("selectedDeviceMac")]
-        private string selectedDeviceMac { get; set; } = string.Empty;
+        private string SelectedDeviceMac { get; set; } = string.Empty;
 
         public BluetoothHeartrateModule()
         {
-            ah = new AsyncHelper(this);
-            wsServer = new WebsocketHeartrateServer(this);
-            deviceDataManager = new(this);
+            Ah = new AsyncHelper(this);
+            _wsServer = new WebsocketHeartrateServer(this);
+            DeviceDataManager = new(this);
         }
 
         protected override BluetoothHeartrateProvider CreateProvider()
@@ -98,7 +95,7 @@ namespace BluetoothHeartrateModule
             if (GetWebocketEnabledSetting())
             {
                 LogDebug("Starting wsServer");
-                _ = wsServer.Start();
+                _ = _wsServer.Start();
             }
             return true;
         }
@@ -112,14 +109,14 @@ namespace BluetoothHeartrateModule
             if (GetWebocketEnabledSetting())
             {
                 LogDebug("Stopping wsServer");
-                wsServer.Stop();
+                _wsServer.Stop();
             }
             return true;
         }
 
         internal string GetDeviceMacSetting()
         {
-            return selectedDeviceMac;
+            return SelectedDeviceMac;
         }
         internal bool GetWebocketEnabledSetting()
         {
@@ -136,9 +133,9 @@ namespace BluetoothHeartrateModule
 
         internal void SetDeviceMacSetting(string deviceMac)
         {
-            if (selectedDeviceMac != deviceMac)
+            if (SelectedDeviceMac != deviceMac)
             {
-                selectedDeviceMac = deviceMac;
+                SelectedDeviceMac = deviceMac;
                 Log($"Selected device with MAC {deviceMac}");
             }
         }
@@ -146,9 +143,9 @@ namespace BluetoothHeartrateModule
         internal void ClearDeviceMacSetting()
         {
             ResetDeviceData();
-            selectedDeviceMac = string.Empty;
-            deviceDataManager.ConnectedDeviceMac = string.Empty;
-            deviceDataManager.Refresh();
+            SelectedDeviceMac = string.Empty;
+            DeviceDataManager.ConnectedDeviceMac = string.Empty;
+            DeviceDataManager.Refresh();
             StartWatcher();
         }
         internal void SetDeviceName(string deviceName)
@@ -158,20 +155,20 @@ namespace BluetoothHeartrateModule
 
         public void ResetCurrentDevice()
         {
-            if (deviceDataManager.currentDevice != null)
+            if (DeviceDataManager.CurrentDevice != null)
             {
                 LogDebug("Resetting currentDevice");
                 try
                 {
                     LogDebug("Disposing of currentDevice");
-                    deviceDataManager.currentDevice.Dispose();
+                    DeviceDataManager.CurrentDevice.Dispose();
                 }
                 catch (ObjectDisposedException)
                 {
                     // Ignore if object is already disposed
                     LogDebug("currentDevice already disposed");
                 }
-                deviceDataManager.currentDevice = null;
+                DeviceDataManager.CurrentDevice = null;
                 LogDebug("currentDevice has been reset");
             }
         }
@@ -179,10 +176,10 @@ namespace BluetoothHeartrateModule
         public void ResetDeviceData()
         {
             LogDebug("Resetting device data");
-            deviceDataManager.ResetHeartRateService();
-            deviceDataManager.ResetHeartRateCharacteristic();
+            DeviceDataManager.ResetHeartRateService();
+            DeviceDataManager.ResetHeartRateCharacteristic();
             ResetCurrentDevice();
-            deviceDataManager.ResetMissingCharacterisicsDevices();
+            DeviceDataManager.ResetMissingCharacterisicsDevices();
             LogDebug("Device data has been reset");
         }
 
@@ -195,31 +192,38 @@ namespace BluetoothHeartrateModule
                 return;
             }
 
-            await wsServer.SendIntMessage(heartrate);
+            await _wsServer.SendIntMessage(heartrate);
         }
         internal BluetoothLEAdvertisementWatcher CreateWatcher()
         {
-            if (watcher == null)
+            if (Watcher == null)
             {
                 LogDebug("Creating new watcher");
-                watcher = new BluetoothLEAdvertisementWatcher { ScanningMode = BluetoothLEScanningMode.Active };
+                Watcher = new BluetoothLEAdvertisementWatcher { ScanningMode = BluetoothLEScanningMode.Active };
                 LogDebug("Adding watcher stopped event handler");
-                watcher.Stopped += Watcher_Stopped;
+                Watcher.Stopped += Watcher_Stopped;
             }
-            return watcher;
+            return Watcher;
         }
 
         private void Watcher_Stopped(BluetoothLEAdvertisementWatcher sender, BluetoothLEAdvertisementWatcherStoppedEventArgs args)
         {
             string scanStatus = args.Error.ToString();
             LogDebug($"Watcher stopped, error: {scanStatus}");
-            Log($"Stopped scanning for devices");
-            if (deviceDataManager.currentDevice == null)
+            if (scanStatus == "RadioNotAvailable")
+            {
+                DeviceDataManager.UpdateBluetoothAvailability(false);
+            }
+            var newConnectionStatus = DeviceDataManager.ConnectedDeviceMac != string.Empty
+                    ? DeviceDataManager.PossibleConnectionStates.Connected
+                    : DeviceDataManager.PossibleConnectionStates.Idle;
+            DeviceDataManager.UpdateConnestionStatus(newConnectionStatus);
+            if (DeviceDataManager.CurrentDevice == null)
             {
                 LogDebug("Invoking OnDisconnected action");
-                deviceDataManager.OnDisconnected?.Invoke();
+                DeviceDataManager.OnDisconnected?.Invoke();
             }
-            deviceDataManager.Refresh();
+            DeviceDataManager.Refresh();
         }
 
         internal Task<bool> StartWatcher()
@@ -231,11 +235,17 @@ namespace BluetoothHeartrateModule
                 try
                 {
                     existingWatcher.Start();
+                    DeviceDataManager.UpdateConnestionStatus(DeviceDataManager.PossibleConnectionStates.Scanning);
                     var deviceMacSetting = GetDeviceMacSetting();
-                    Log($"Scanning for {(deviceMacSetting == string.Empty ? "devices" : $"device with MAC {deviceMacSetting}")}");
+                    LogDebug($"Scanning for {(deviceMacSetting == string.Empty ? "devices" : $"device with MAC {deviceMacSetting}")}");
                 } catch (Exception ex)
                 {
-                    Log($"Could not start scanning for devices: {ex.Message}");
+                    if (ex is COMException)
+                    {
+                        DeviceDataManager.UpdateBluetoothAvailability(false);
+                    }
+
+                    Log($"Could not start scanning for devices [{ex.GetType()}] ({ex.Message})");
                     return Task.FromResult(false);
                 }
             }
@@ -245,7 +255,7 @@ namespace BluetoothHeartrateModule
         internal void StopWatcher()
         {
             LogDebug("Stopping watcher");
-            watcher?.Stop();
+            Watcher?.Stop();
         }
 
         internal enum BluetoothHeartrateSetting

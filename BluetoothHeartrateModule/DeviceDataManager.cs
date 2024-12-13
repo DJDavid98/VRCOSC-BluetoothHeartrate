@@ -1,13 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net;
+﻿using System.IO;
 using System.Reflection;
-using System.Runtime.Intrinsics.Arm;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using Windows.Devices.Bluetooth;
 using Windows.Devices.Bluetooth.Advertisement;
 using Windows.Devices.Bluetooth.GenericAttributeProfile;
@@ -17,31 +10,43 @@ namespace BluetoothHeartrateModule
 {
     public class DeviceDataManager
     {
-        Dictionary<string, DeviceData> Devices = new();
+        Dictionary<string, DeviceData> _devices = new();
 
-        BluetoothHeartrateModule module;
-        DeviceNameResolver dnr;
-        AsyncHelper ah;
+        BluetoothHeartrateModule _module;
+        DeviceNameResolver _dnr;
+        AsyncHelper _ah;
 
         internal string ConnectedDeviceMac = string.Empty;
         internal string ProcessingDeviceMac = string.Empty;
-        internal GattDeviceService? heartRateService;
-        internal GattCharacteristic? heartRateCharacteristic;
-        internal BluetoothLEDevice? currentDevice;
-        internal readonly HashSet<string> missingCharacteristicDevices = new();
+        internal bool IsBluetoothAvailable = true;
+        internal PossibleConnectionStates ConnectionStatus = PossibleConnectionStates.Idle;
+        internal GattDeviceService? HeartRateService;
+        internal GattCharacteristic? HeartRateCharacteristic;
+        internal BluetoothLEDevice? CurrentDevice;
+        internal readonly HashSet<string> MissingCharacteristicDevices = new();
+
+        public enum PossibleConnectionStates
+        {
+            Idle,
+            Scanning,
+            Connecting,
+            Connected,
+        }
 
         public Action? OnDeviceListUpdate { get; internal set; }
         public Action<byte>? OnHeartRateCharacteristicValueChange { get; internal set; }
         public Action? OnConnected { get; internal set; }
         public Action? OnDisconnected { get; internal set; }
+        public Action? OnBluetoothAvailabilityChange { get; internal set; }
+        public Action? OnConnectionStatusChange { get; internal set; }
 
-        private Dictionary<ulong, bool> processingAdvertisementMap = new();
-        internal Dictionary<string, string> prefixData = new();
+        private Dictionary<ulong, bool> _processingAdvertisementMap = new();
+        internal Dictionary<string, string> PrefixData = new();
 
         public DeviceDataManager(BluetoothHeartrateModule module) {
-            this.module = module;
-            this.ah = module.ah;
-            this.dnr = new DeviceNameResolver(module);
+            this._module = module;
+            this._ah = module.Ah;
+            this._dnr = new DeviceNameResolver(module);
             // TODO Figure this out later
             // this.prefixData = GetPrefixData();
         }
@@ -71,11 +76,11 @@ namespace BluetoothHeartrateModule
                         }
                     }
                 }
-                module.LogDebug($"Loaded manufacturer data ({data.Count} entries)");
+                _module.LogDebug($"Loaded manufacturer data ({data.Count} entries)");
             }
             catch (FileNotFoundException)
             {
-                module.LogDebug($"Optional resource {fileName} not found, manufacturer data will not be available");
+                _module.LogDebug($"Optional resource {fileName} not found, manufacturer data will not be available");
             }
             return data;
         }
@@ -83,7 +88,7 @@ namespace BluetoothHeartrateModule
         private DeviceData Create(string mac)
         {
             var data = new DeviceData(mac, this);
-            Devices[mac] = data;
+            _devices[mac] = data;
             return data;
         }
         internal DeviceData Add(string advertisementMac, string deviceName)
@@ -97,16 +102,16 @@ namespace BluetoothHeartrateModule
 
         internal async Task<DeviceData?> Add(ulong bluetoothAddress, BluetoothLEAdvertisement advertisement, CancellationTokenSource cancelToken)
         {
-            if (processingAdvertisementMap.ContainsKey(bluetoothAddress)) { return null; }
+            if (_processingAdvertisementMap.ContainsKey(bluetoothAddress)) { return null; }
 
-            processingAdvertisementMap.Add(bluetoothAddress, true);
+            _processingAdvertisementMap.Add(bluetoothAddress, true);
             try
             {
                 var advertisementMac = Converter.FormatAsMac(bluetoothAddress);
                 var logPrefix = $"[MAC:{advertisementMac}]";
-                module.LogDebug($"{logPrefix} Resolving device name");
+                _module.LogDebug($"{logPrefix} Resolving device name");
                 string resolvedDeviceName = string.Empty;
-                var deviceName = await module.ah.WaitAsync(dnr.GetDeviceNameAsync(advertisement, bluetoothAddress), AsyncTask.GetDeviceName, cancelToken);
+                var deviceName = await _module.Ah.WaitAsync(_dnr.GetDeviceNameAsync(advertisement, bluetoothAddress), AsyncTask.GetDeviceName, cancelToken);
                 if (deviceName != null)
                 {
                     resolvedDeviceName = deviceName;
@@ -115,21 +120,21 @@ namespace BluetoothHeartrateModule
             }
             finally
             {
-                processingAdvertisementMap.Remove(bluetoothAddress);
+                _processingAdvertisementMap.Remove(bluetoothAddress);
             }
         }
 
         public DeviceData? Get(string mac) {
-            return Devices.ContainsKey(mac) ? Devices[mac] : null;
+            return _devices.ContainsKey(mac) ? _devices[mac] : null;
         }
 
         public bool Has(string mac) {
-            return Devices.ContainsKey(mac);
+            return _devices.ContainsKey(mac);
         }
 
         public void Remove(string mac)
         {
-            Devices.Remove(mac);
+            _devices.Remove(mac);
             Refresh();
         }
         public void Refresh()
@@ -139,106 +144,154 @@ namespace BluetoothHeartrateModule
 
         public DeviceData[] GetDevices()
         {
-            return Devices.Values.ToArray();
+            return _devices.Values.ToArray();
         }
 
-        public void ClearDevices() { Devices.Clear(); }
+        public void ClearDevices() { _devices.Clear(); }
+
+        internal void SetHasHeartrateService(string advertisementMac, bool hasHeartrateService)
+        {
+            var device = Get(advertisementMac);
+            if (device != null)
+            {
+                device.NoHeartrateService = !hasHeartrateService;
+            }
+        }
+        internal void SetHasHeartrateCharacteristic(string advertisementMac, bool hasHeartrateCharacteristic)
+        {
+            var device = Get(advertisementMac);
+            if (device != null)
+            {
+                device.NoHeartrateCharacteristic = !hasHeartrateCharacteristic;
+            }
+        }
 
         public void ResetHeartRateService()
         {
-            if (heartRateService != null)
+            if (HeartRateService != null)
             {
-                module.LogDebug("Resetting heartRateService");
+                _module.LogDebug("Resetting heartRateService");
                 try
                 {
-                    module.LogDebug("Disposing of heartRateService");
-                    heartRateService.Dispose();
+                    _module.LogDebug("Disposing of heartRateService");
+                    HeartRateService.Dispose();
                 }
                 catch (ObjectDisposedException)
                 {
                     // Ignore if object is already disposed
-                    module.LogDebug("heartRateService already disposed");
+                    _module.LogDebug("heartRateService already disposed");
                 }
-                heartRateService = null;
-                module.LogDebug("heartRateService has been reset");
+                HeartRateService = null;
+                _module.LogDebug("heartRateService has been reset");
             }
         }
         public void ResetHeartRateCharacteristic()
         {
-            if (heartRateCharacteristic != null)
+            if (HeartRateCharacteristic != null)
             {
-                module.LogDebug("Resetting heartRateCharacteristic");
+                _module.LogDebug("Resetting heartRateCharacteristic");
                 try
                 {
-                    module.LogDebug("Unregistering ValueChanged handler");
-                    heartRateCharacteristic.ValueChanged -= HeartRateCharacteristic_ValueChanged;
+                    _module.LogDebug("Unregistering ValueChanged handler");
+                    HeartRateCharacteristic.ValueChanged -= HeartRateCharacteristic_ValueChanged;
                 }
                 catch (ObjectDisposedException)
                 {
                     // Ignore if object is already disposed
-                    module.LogDebug("heartRateCharacteristic already disposed");
+                    _module.LogDebug("heartRateCharacteristic already disposed");
                 }
-                heartRateCharacteristic = null;
-                module.LogDebug("heartRateCharacteristic has been reset");
+                HeartRateCharacteristic = null;
+                _module.LogDebug("heartRateCharacteristic has been reset");
             }
         }
 
         public void ResetMissingCharacterisicsDevices()
         {
-            module.LogDebug("Clearing missing characteristics");
-            missingCharacteristicDevices.Clear();
+            _module.LogDebug("Clearing missing characteristics");
+            MissingCharacteristicDevices.Clear();
+        }
+
+        public void UpdateBluetoothAvailability(bool available)
+        {
+            if (IsBluetoothAvailable == available)
+            {
+                return;
+            }
+            _module.LogDebug($"Updated bluetooth state (available: {available}");
+            IsBluetoothAvailable = available;
+            OnBluetoothAvailabilityChange?.Invoke();
+        }
+
+        public bool GetBluetoothAvailability()
+        {
+            return IsBluetoothAvailable;
+        }
+        public void UpdateConnestionStatus(PossibleConnectionStates status)
+        {
+            if (ConnectionStatus == status)
+            {
+                return;
+            }
+            _module.LogDebug($"Bluetooth connection status change (status: {status})");
+            ConnectionStatus = status;
+            OnConnectionStatusChange?.Invoke();
+        }
+
+        public PossibleConnectionStates GetConnectionStatus()
+        {
+            return ConnectionStatus;
         }
 
         public async Task HandleHeartRateCharacteristicFound(string logPrefix, GattDeviceService firstService, GattCharacteristic characteristic, CancellationTokenSource watcherStopper)
         {
-            heartRateService = firstService;
-            heartRateCharacteristic = characteristic;
-            module.LogDebug("Found heartrate measurement characteristic");
+            HeartRateService = firstService;
+            HeartRateCharacteristic = characteristic;
+            _module.LogDebug("Found heartrate measurement characteristic");
 
-            heartRateCharacteristic.ValueChanged += HeartRateCharacteristic_ValueChanged;
-            module.LogDebug("Registered heartrate characteristic value change handler");
+            HeartRateCharacteristic.ValueChanged += HeartRateCharacteristic_ValueChanged;
+            _module.LogDebug("Registered heartrate characteristic value change handler");
 
             // Enable notifications for heart rate measurements
-            module.LogDebug("Requesting characteristic notifications");
-            GattCommunicationStatus? status = await ah.WaitAsync(heartRateCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue.Notify), AsyncTask.WriteCharacteristicConfigDescriptor, watcherStopper);
+            _module.LogDebug("Requesting characteristic notifications");
+            GattCommunicationStatus? status = await _ah.WaitAsync(HeartRateCharacteristic.WriteClientCharacteristicConfigurationDescriptorAsync(GattClientCharacteristicConfigurationDescriptorValue.Notify), AsyncTask.WriteCharacteristicConfigDescriptor, watcherStopper);
             if (status == GattCommunicationStatus.Success)
             {
-                module.LogDebug($"{logPrefix} Invoking OnConnected action");
+                _module.LogDebug($"{logPrefix} Invoking OnConnected action");
                 OnConnected?.Invoke();
-                module.Log("Connection successful");
+                _module.LogDebug("Connection successful");
                 Refresh();
-                module.LogDebug($"{logPrefix} Stopping watcher");
-                module.StopWatcher();
+                _module.LogDebug($"{logPrefix} Stopping watcher");
+                _module.StopWatcher();
             }
             else
             {
-                module.LogDebug($"Failed to enable heart rate notifications. Status: {status}");
+                _module.LogDebug($"Failed to enable heart rate notifications. Status: {status}");
             }
         }
 
         private void HeartRateCharacteristic_ValueChanged(GattCharacteristic sender, GattValueChangedEventArgs args)
         {
-            module.LogDebug("HeartRateCharacteristic_ValueChanged");
+            _module.LogDebug("HeartRateCharacteristic_ValueChanged");
             var data = new byte[args.CharacteristicValue.Length];
             DataReader.FromBuffer(args.CharacteristicValue).ReadBytes(data);
 
             var updateData = data[1];
-            module.LogDebug($"Invoking OnHeartrateUpdate action with data {updateData}");
+            _module.LogDebug($"Invoking OnHeartrateUpdate action with data {updateData}");
             OnHeartRateCharacteristicValueChange?.Invoke(updateData);
         }
 
         internal void RegiterConnectionStatusChangeHandler(string logPrefix)
         {
-            module.LogDebug($"{logPrefix} Register connection status change handler");
-            if (currentDevice != null)
+            _module.LogDebug($"{logPrefix} Register connection status change handler");
+            if (CurrentDevice != null)
             {
-                currentDevice.ConnectionStatusChanged += Device_ConnectionStatusChanged;
+                CurrentDevice.ConnectionStatusChanged += Device_ConnectionStatusChanged;
             }
         }
 
         private void Device_ConnectionStatusChanged(BluetoothLEDevice sender, object args)
         {
-            module.LogDebug($"Device connection status changed to {sender.ConnectionStatus}");
+            _module.LogDebug($"Device connection status changed to {sender.ConnectionStatus}");
             if (sender.ConnectionStatus == BluetoothConnectionStatus.Disconnected)
             {
                 OnDisconnected?.Invoke();
