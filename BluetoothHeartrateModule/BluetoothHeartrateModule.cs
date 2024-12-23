@@ -77,12 +77,12 @@ namespace BluetoothHeartrateModule
             var wsServerHostSetting = GetSetting(BluetoothHeartrateSetting.WebsocketServerHost);
             if (wsServerHostSetting != null)
             {
-                wsServerHostSetting.IsEnabled = newValue;
+                wsServerHostSetting.IsEnabled.Value = newValue;
             }
             var wsServerPortSetting = GetSetting(BluetoothHeartrateSetting.WebsocketServerPort);
             if (wsServerPortSetting != null)
             {
-                wsServerPortSetting.IsEnabled = newValue;
+                wsServerPortSetting.IsEnabled.Value = newValue;
             }
         }
 
