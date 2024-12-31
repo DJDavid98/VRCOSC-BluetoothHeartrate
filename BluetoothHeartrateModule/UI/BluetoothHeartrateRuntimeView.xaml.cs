@@ -1,4 +1,5 @@
 ﻿using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -26,13 +27,6 @@ namespace BluetoothHeartrateModule.UI
             InitializeComponent();
 
             DataContext = this;
-
-            this.Module.DeviceDataManager.OnDeviceListUpdate += HandleDeviceListUpdate;
-            this.Module.DeviceDataManager.OnBluetoothAvailabilityChange += HandleBluetoothAvailabilityChange;
-            this.Module.DeviceDataManager.OnConnectionStatusChange += HandleConnectionStatusChange;
-            HandleDeviceListUpdate();
-            HandleBluetoothAvailabilityChange();
-            HandleConnectionStatusChange();
         }
 
         private void HandleDeviceListUpdate()
@@ -152,6 +146,16 @@ namespace BluetoothHeartrateModule.UI
         private void DeviceSelection_LostMouseCapture(object sender, MouseEventArgs e)
         {
 
+        }
+
+        private void OnLoad(object sender, RoutedEventArgs e)
+        {
+            this.Module.DeviceDataManager.OnDeviceListUpdate += HandleDeviceListUpdate;
+            this.Module.DeviceDataManager.OnBluetoothAvailabilityChange += HandleBluetoothAvailabilityChange;
+            this.Module.DeviceDataManager.OnConnectionStatusChange += HandleConnectionStatusChange;
+            HandleDeviceListUpdate();
+            HandleBluetoothAvailabilityChange();
+            HandleConnectionStatusChange();
         }
     }
 }
